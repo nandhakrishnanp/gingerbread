@@ -1,13 +1,14 @@
 @import "tailwindcss";
 
 @theme {
-  --color-cream: #fbf4e6;
-  --color-dough: #f1e1c3;
-  --color-sugar: #fffaf0;
-  --color-ginger: #c87a4a;
-  --color-ember: #a35a1f;
-  --color-cocoa: #5b3a24;
-  --color-bark: #2b1b11;
+  /* Monochrome "thread" palette: everything runs black → white → grey. */
+  --color-cream: #ffffff;
+  --color-dough: #f4f4f5;
+  --color-sugar: #ffffff;
+  --color-ginger: #a1a1aa;
+  --color-ember: #18181b;
+  --color-cocoa: #71717a;
+  --color-bark: #09090b;
 }
 
 /* Dark mode is driven by a `.dark` class on <html> (set by the theme script and
@@ -71,14 +72,14 @@
   }
 
   .prose-gingerbread blockquote {
-    border-left: 3px solid var(--color-ginger);
+    border-left: 3px solid var(--color-cocoa);
     padding-left: 1rem;
     font-style: italic;
     opacity: 0.85;
   }
 
   .prose-gingerbread code {
-    background: color-mix(in srgb, var(--color-ginger) 18%, transparent);
+    background: color-mix(in srgb, var(--color-cocoa) 18%, transparent);
     border-radius: 0.35rem;
     padding: 0.1rem 0.35rem;
     font-size: 0.9em;
@@ -97,7 +98,8 @@
   }
 
   .prose-gingerbread a {
-    color: var(--color-ember);
+    color: inherit;
     text-decoration: underline;
+    text-underline-offset: 2px;
   }
 }

@@ -22,7 +22,7 @@ export function TagInput({ tags, onChange }: Props) {
       {tags.map((tag) => (
         <span
           key={tag}
-          className="inline-flex items-center gap-1 rounded-full bg-ginger/20 px-3 py-1 text-sm text-ember"
+          className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-black/5 px-3 py-1 text-sm text-bark dark:border-white/15 dark:bg-white/10 dark:text-cream"
         >
           #{tag}
           <button

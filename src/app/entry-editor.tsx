@@ -26,6 +26,8 @@ interface Props {
   historyLoading: boolean;
   onToggleHistory: () => void;
   onRestore: (item: HistoryItem) => void;
+  /** Present when the editor is shown as a compose overlay. */
+  onClose?: () => void;
 }
 
 const STATUS_LABEL: Record<SaveStatus, string> = {
@@ -46,6 +48,7 @@ export function EntryEditor({
   historyLoading,
   onToggleHistory,
   onRestore,
+  onClose,
 }: Props) {
   const [preview, setPreview] = useState(false);
   const [textarea, setTextarea] = useState<HTMLTextAreaElement | null>(null);
@@ -113,8 +116,18 @@ export function EntryEditor({
   ];
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex flex-wrap items-center gap-2 border-b border-cocoa/15 pb-3">
+    <div className="flex w-full flex-col">
+      <header className="flex flex-wrap items-center gap-2 border-b border-black/10 pb-3 dark:border-white/15">
+        {onClose && (
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="grid h-8 w-8 place-items-center rounded-full text-lg transition hover:bg-black/5 dark:hover:bg-white/10"
+          >
+            ✕
+          </button>
+        )}
         <input
           type="date"
           className={`${inputClass} w-auto flex-none`}
@@ -161,7 +174,7 @@ export function EntryEditor({
       />
 
       {historyOpen && (
-        <div className="mt-4 rounded-xl border border-cocoa/15 bg-ginger/5 p-4 text-sm">
+        <div className="mt-4 rounded-xl border border-black/10 bg-black/[0.03] p-4 text-sm dark:border-white/15 dark:bg-white/[0.04]">
           <p className="font-medium">Version history</p>
           {historyLoading ? (
             <p className="mt-2 opacity-60">Loading…</p>
@@ -199,7 +212,7 @@ export function EntryEditor({
               key={tool.title}
               type="button"
               title={tool.title}
-              className="rounded-md px-2 py-1 text-sm hover:bg-ginger/15"
+              className="rounded-md px-2 py-1 text-sm transition hover:bg-black/5 dark:hover:bg-white/10"
               onClick={() => runTool(tool.action)}
             >
               {tool.label}
@@ -213,7 +226,7 @@ export function EntryEditor({
         ) : (
           <textarea
             ref={setTextarea}
-            className="h-full min-h-[45vh] w-full resize-none bg-transparent font-mono text-[0.95rem] leading-relaxed outline-none placeholder:opacity-40"
+            className="min-h-[40vh] w-full resize-none bg-transparent font-mono text-[0.95rem] leading-relaxed outline-none placeholder:opacity-40"
             placeholder="Write freely…"
             value={draft.markdown}
             onChange={(e) => onPatch({ markdown: e.target.value })}
@@ -228,7 +241,7 @@ export function EntryEditor({
         )}
       </div>
 
-      <footer className="border-t border-cocoa/15 pt-3">
+      <footer className="border-t border-black/10 pt-3 dark:border-white/15">
         <TagInput tags={draft.tags} onChange={(tags) => onPatch({ tags })} />
       </footer>
     </div>

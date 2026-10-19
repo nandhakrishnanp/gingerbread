@@ -64,7 +64,7 @@ export function ThemeToggle() {
       onClick={() =>
         change(theme === "light" ? "dark" : theme === "dark" ? "system" : "light")
       }
-      className="inline-flex items-center gap-1.5 rounded-full border border-cocoa/20 px-3 py-1.5 text-sm hover:bg-ginger/10"
+      className="inline-flex items-center gap-1.5 rounded-full border border-black/15 px-3 py-1.5 text-sm transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
       title={`Theme: ${LABEL[theme]} (click to change)`}
     >
       <span aria-hidden>{ICON[theme]}</span>

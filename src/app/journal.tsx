@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as api from "@/lib/api-client";
 import { AUTOLOCK_IDLE_MS, AUTOSAVE_DEBOUNCE_MS, CRYPTO_VERSION } from "@/lib/constants";
 import { decryptEntry, encryptEntry } from "@/lib/crypto";
@@ -62,6 +62,7 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const entriesRef = useRef(entries);
   const draftRef = useRef(draft);
@@ -146,16 +147,6 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
     return orderEntries(list);
   }, [entries, query, activeTag, index]);
 
-  const grouped = useMemo(() => {
-    const groups = new Map<string, DecryptedEntry[]>();
-    for (const entry of visible) {
-      const list = groups.get(entry.date) ?? [];
-      list.push(entry);
-      groups.set(entry.date, list);
-    }
-    return [...groups.entries()];
-  }, [visible]);
-
   const selectEntry = useCallback(
     (entry: DecryptedEntry) => {
       setSelectedId(entry.id);
@@ -226,6 +217,31 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
     const timer = window.setTimeout(() => void save(), AUTOSAVE_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [draft, selectedId, entries, save]);
+
+  /** Close the compose overlay, flushing any pending edit first. */
+  const closeEditor = useCallback(() => {
+    void save().finally(() => setSelectedId(null));
+  }, [save]);
+
+  // Escape closes the compose overlay.
+  useEffect(() => {
+    if (!selectedId) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeEditor();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedId, closeEditor]);
+
+  // Lock body scroll while the overlay is open.
+  useEffect(() => {
+    if (!selectedId) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [selectedId]);
 
   async function createEntry() {
     setBusy(true);
@@ -335,48 +351,122 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
     );
   }
 
+  const hasFilters = query.trim().length > 0 || activeTag !== null;
+
   return (
-    <div className="flex h-dvh overflow-hidden">
-      <aside
-        className={`${
-          selectedId ? "hidden md:flex" : "flex"
-        } w-full shrink-0 flex-col border-r border-cocoa/15 bg-sugar/60 md:w-80 dark:bg-bark/50`}
-      >
-        <div className="space-y-3 p-4">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl" aria-hidden>
-              🍪
-            </span>
-            <h1 className="font-serif text-xl font-semibold">Gingerbread</h1>
-            <div className="ml-auto">
-              <ThemeToggle />
-            </div>
+    <div className="min-h-dvh bg-cream text-bark dark:bg-bark dark:text-cream">
+      <header className="sticky top-0 z-20 border-b border-black/10 bg-cream/85 backdrop-blur-md dark:border-white/15 dark:bg-bark/85">
+        <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3">
+          <span
+            aria-hidden
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-black/15 text-lg dark:border-white/20"
+          >
+            🍪
+          </span>
+          <div className="min-w-0 leading-tight">
+            <h1 className="truncate font-serif text-lg font-semibold tracking-tight">
+              Gingerbread
+            </h1>
+            <p className="hidden text-xs opacity-50 sm:block">your private thread</p>
           </div>
-
-          <input
-            className={inputClass}
-            placeholder="Search entries…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-
-          <div className="flex gap-2">
+          <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
-              className={`${primaryButtonClass} flex-1`}
+              className={`${primaryButtonClass} px-3 sm:px-4`}
               onClick={createEntry}
               disabled={busy}
             >
-              + New entry
+              + New
             </button>
+            <ThemeToggle />
+            <div className="relative">
+              <button
+                type="button"
+                aria-label="Menu"
+                className={`${ghostButtonClass} px-2.5`}
+                onClick={() => setMenuOpen((open) => !open)}
+              >
+                ⋯
+              </button>
+              {menuOpen && (
+                <>
+                  <button
+                    type="button"
+                    aria-hidden
+                    tabIndex={-1}
+                    className="fixed inset-0 z-30 cursor-default"
+                    onClick={() => setMenuOpen(false)}
+                  />
+                  <div className="absolute right-0 z-40 mt-2 w-56 rounded-xl border border-black/10 bg-white p-1.5 shadow-xl dark:border-white/15 dark:bg-neutral-950">
+                    <MenuItem
+                      onClick={() => {
+                        setMenuOpen(false);
+                        void exportPdf(entries);
+                      }}
+                    >
+                      Export PDF
+                    </MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        setMenuOpen(false);
+                        exportMarkdown(entries);
+                      }}
+                    >
+                      Export Markdown
+                    </MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        setMenuOpen(false);
+                        exportEncryptedJson(records);
+                      }}
+                    >
+                      Encrypted backup
+                    </MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        setMenuOpen(false);
+                        fileInput.current?.click();
+                      }}
+                    >
+                      Restore from backup…
+                    </MenuItem>
+                    <div className="my-1 border-t border-black/10 dark:border-white/15" />
+                    <MenuItem
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onLock();
+                      }}
+                    >
+                      Lock
+                    </MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        setMenuOpen(false);
+                        void api.logout().then(onLogout);
+                      }}
+                    >
+                      Sign out
+                    </MenuItem>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
+        </div>
 
+        <div className="mx-auto max-w-2xl space-y-2 px-4 pb-3">
+          <input
+            className={inputClass}
+            placeholder="Search the thread…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
           {allTags.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {activeTag && (
                 <button
                   type="button"
-                  className="rounded-full bg-ember px-2.5 py-1 text-xs text-cream"
+                  className="rounded-full bg-black px-2.5 py-1 text-xs text-white dark:bg-white dark:text-black"
                   onClick={() => setActiveTag(null)}
                 >
                   #{activeTag} ×
@@ -388,7 +478,7 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
                   <button
                     key={tag}
                     type="button"
-                    className="rounded-full bg-ginger/15 px-2.5 py-1 text-xs hover:bg-ginger/25"
+                    className="rounded-full border border-black/15 px-2.5 py-1 text-xs transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
                     onClick={() => setActiveTag(tag)}
                   >
                     #{tag} {count}
@@ -397,105 +487,127 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
             </div>
           )}
         </div>
+      </header>
 
-        <nav className="flex-1 space-y-4 overflow-y-auto px-4 pb-4">
-          {loadError && <p className="text-sm text-red-600">{loadError}</p>}
-          {visible.length === 0 && (
-            <p className="text-sm opacity-60">
-              {entries.length === 0 ? "No entries yet. Start writing!" : "No matches."}
+      <main className="mx-auto max-w-2xl px-4 pb-16">
+        {loadError && (
+          <p className="py-4 text-sm text-red-600 dark:text-red-400">{loadError}</p>
+        )}
+
+        {!hasFilters && entries.length > 0 && (
+          <button
+            type="button"
+            onClick={createEntry}
+            disabled={busy}
+            className="flex w-full items-center gap-3 border-b border-black/10 py-4 text-left text-lg opacity-60 transition hover:bg-black/[0.02] dark:border-white/15 dark:hover:bg-white/[0.03]"
+          >
+            <span
+              aria-hidden
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-black/15 text-xs font-semibold dark:border-white/20"
+            >
+              You
+            </span>
+            <span>What&rsquo;s on your mind?</span>
+          </button>
+        )}
+
+        {visible.length === 0 ? (
+          <div className="py-24 text-center opacity-60">
+            <p className="text-5xl" aria-hidden>
+              {entries.length === 0 ? "🍪" : "🔍"}
             </p>
-          )}
-          {grouped.map(([date, group]) => (
-            <div key={date}>
-              <p className="mb-1 text-xs font-medium uppercase tracking-wide opacity-50">
-                {formatDate(date)}
-              </p>
-              <ul className="space-y-1">
-                {group.map((entry) => (
-                  <li key={entry.id}>
-                    <button
-                      type="button"
-                      onClick={() => selectEntry(entry)}
-                      className={`w-full rounded-lg px-3 py-2 text-left transition hover:bg-ginger/15 ${
-                        entry.id === selectedId ? "bg-ginger/20" : ""
-                      }`}
-                    >
-                      <span className="block truncate font-medium">
-                        {entry.title.trim() || "(untitled)"}
-                      </span>
-                      <span className="block truncate text-xs opacity-60">
-                        {entry.markdown.replace(/\s+/g, " ").slice(0, 70) || "…"}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </nav>
-
-        <div className="space-y-2 border-t border-cocoa/15 p-4 text-sm">
-          <details className="rounded-lg border border-cocoa/15 px-3 py-2">
-            <summary className="cursor-pointer font-medium">Export &amp; backup</summary>
-            <div className="mt-2 flex flex-col gap-1.5">
-              <button className={ghostButtonClass} type="button" onClick={() => void exportPdf(entries)}>
-                Export PDF
-              </button>
-              <button className={ghostButtonClass} type="button" onClick={() => exportMarkdown(entries)}>
-                Export Markdown
-              </button>
-              <button className={ghostButtonClass} type="button" onClick={() => exportEncryptedJson(records)}>
-                Download encrypted backup
-              </button>
+            <p className="mt-4 text-sm">
+              {entries.length === 0
+                ? "Your thread is empty. Start writing."
+                : "No posts match your filters."}
+            </p>
+            {entries.length === 0 && (
               <button
-                className={ghostButtonClass}
                 type="button"
-                onClick={() => fileInput.current?.click()}
+                className={`${primaryButtonClass} mt-5`}
+                onClick={createEntry}
+                disabled={busy}
               >
-                Restore from backup…
+                + New entry
               </button>
-              <input
-                ref={fileInput}
-                type="file"
-                accept="application/json,.json"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  void file.text().then(restoreBackup);
-                }}
-              />
-            </div>
-          </details>
-          <div className="flex gap-2">
-            <button type="button" className={`${ghostButtonClass} flex-1 justify-center`} onClick={onLock}>
-              Lock
-            </button>
-            <button
-              type="button"
-              className={`${ghostButtonClass} flex-1 justify-center`}
-              onClick={() => void api.logout().then(onLogout)}
-            >
-              Sign out
-            </button>
+            )}
           </div>
-        </div>
-      </aside>
+        ) : (
+          <ol>
+            {visible.map((entry, index) => (
+              <li key={entry.id} className="flex gap-3">
+                <div className="flex w-10 shrink-0 flex-col items-center">
+                  <Avatar entry={entry} />
+                  {index < visible.length - 1 && (
+                    <span
+                      aria-hidden
+                      className="w-px flex-1 bg-black/10 dark:bg-white/15"
+                    />
+                  )}
+                </div>
+                <article
+                  className={`min-w-0 flex-1 ${
+                    index < visible.length - 1 ? "pb-6" : "pb-4"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => selectEntry(entry)}
+                    className="-mx-2 block w-full rounded-xl px-2 py-1.5 text-left transition hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
+                  >
+                    <div className="flex flex-wrap items-baseline gap-x-1.5 text-sm">
+                      <span className="font-semibold">Gingerbread</span>
+                      <span className="opacity-50">@you</span>
+                      <span className="opacity-40">
+                        · {formatPostDate(entry.date)}
+                      </span>
+                    </div>
+                    {entry.title.trim() && (
+                      <h2 className="mt-0.5 font-serif text-xl font-semibold leading-snug">
+                        {entry.title}
+                      </h2>
+                    )}
+                    {entry.markdown.trim() && (
+                      <p className="mt-0.5 line-clamp-6 whitespace-pre-wrap text-[0.95rem] leading-relaxed opacity-90">
+                        {entry.markdown.trim()}
+                      </p>
+                    )}
+                    {entry.tags.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-x-2 text-sm opacity-60">
+                        {entry.tags.map((tag) => (
+                          <span key={tag}>#{tag}</span>
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                </article>
+              </li>
+            ))}
+          </ol>
+        )}
+      </main>
 
-      <main
-        className={`${
-          selectedId ? "flex" : "hidden md:flex"
-        } min-w-0 flex-1 flex-col overflow-y-auto bg-cream/40 p-4 sm:p-6 dark:bg-bark/30`}
-      >
-        {draft && selectedId ? (
-          <>
-            <button
-              type="button"
-              className={`${ghostButtonClass} mb-3 self-start md:hidden`}
-              onClick={() => setSelectedId(null)}
-            >
-              ← All entries
-            </button>
+      <input
+        ref={fileInput}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          void file.text().then(restoreBackup);
+        }}
+      />
+
+      {selectedId && draft && (
+        <div
+          className="fixed inset-0 z-50 flex justify-center bg-black/50 backdrop-blur-sm sm:p-6"
+          onClick={closeEditor}
+        >
+          <div
+            className="w-full max-w-2xl overflow-y-auto bg-cream p-4 shadow-2xl sm:max-h-[90vh] sm:rounded-2xl sm:border sm:border-black/10 sm:p-6 dark:bg-neutral-950 sm:dark:border-white/15"
+            onClick={(event) => event.stopPropagation()}
+          >
             <EntryEditor
               draft={draft}
               status={status}
@@ -509,31 +621,47 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
               historyLoading={historyLoading}
               onToggleHistory={() => void toggleHistory()}
               onRestore={restoreHistory}
+              onClose={closeEditor}
             />
-          </>
-        ) : (
-          <div className="m-auto max-w-sm text-center opacity-70">
-            <span className="text-5xl" aria-hidden>
-              ✍️
-            </span>
-            <p className="mt-4">
-              Select an entry, or create a new one to start writing. Everything is
-              encrypting right here in your browser.
-            </p>
           </div>
-        )}
-      </main>
+        </div>
+      )}
     </div>
   );
 }
 
-function formatDate(value: string): string {
+function Avatar({ entry }: { entry: DecryptedEntry }) {
+  const initial =
+    (entry.title.trim() || entry.tags[0] || "").slice(0, 1).toUpperCase() || "·";
+  return (
+    <span
+      aria-hidden
+      className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-black/15 bg-dough text-sm font-semibold uppercase dark:border-white/20 dark:bg-white/10"
+    >
+      {initial}
+    </span>
+  );
+}
+
+function MenuItem({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="block w-full rounded-lg px-3 py-2 text-left text-sm transition hover:bg-black/5 dark:hover:bg-white/10"
+    >
+      {children}
+    </button>
+  );
+}
+
+function formatPostDate(value: string): string {
   const date = new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
+  const sameYear = date.getFullYear() === new Date().getFullYear();
   return date.toLocaleDateString(undefined, {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
+    month: "short",
     day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
   });
 }

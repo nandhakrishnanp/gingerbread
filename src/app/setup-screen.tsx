@@ -90,7 +90,7 @@ export function SetupScreen({ params, onDone }: Props) {
           and store it somewhere safe. It is shown{" "}
           <strong>once and never again</strong>.
         </p>
-        <p className="mt-5 break-words rounded-lg bg-ginger/15 px-4 py-3 font-mono text-lg tracking-wider text-ember">
+        <p className="mt-5 break-words rounded-lg border border-black/10 bg-black/5 px-4 py-3 font-mono text-lg tracking-wider text-bark dark:border-white/15 dark:bg-white/10 dark:text-cream">
           {recoveryKey}
         </p>
         <button
