@@ -13,6 +13,7 @@ import {
 } from "@/lib/backup";
 import { buildSearchIndex } from "@/lib/search";
 import type { DecryptedEntry, Draft, EntryRecord } from "@/lib/types";
+import { ActivityHeatmap } from "./activity-heatmap";
 import { EntryEditor, type HistoryItem, type SaveStatus } from "./entry-editor";
 import { ThemeToggle } from "./theme-toggle";
 import { ghostButtonClass, inputClass, primaryButtonClass } from "./ui";
@@ -495,20 +496,23 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
         )}
 
         {!hasFilters && entries.length > 0 && (
-          <button
-            type="button"
-            onClick={createEntry}
-            disabled={busy}
-            className="flex w-full items-center gap-3 border-b border-black/10 py-4 text-left text-lg opacity-60 transition hover:bg-black/[0.02] dark:border-white/15 dark:hover:bg-white/[0.03]"
-          >
-            <span
-              aria-hidden
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-black/15 text-xs font-semibold dark:border-white/20"
+          <>
+            <ActivityHeatmap entries={entries} />
+            <button
+              type="button"
+              onClick={createEntry}
+              disabled={busy}
+              className="flex w-full items-center gap-3 border-b border-black/10 py-4 text-left text-lg opacity-60 transition hover:bg-black/[0.02] dark:border-white/15 dark:hover:bg-white/[0.03]"
             >
-              You
-            </span>
-            <span>What&rsquo;s on your mind?</span>
-          </button>
+              <span
+                aria-hidden
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-black/15 text-xs font-semibold dark:border-white/20"
+              >
+                You
+              </span>
+              <span>What&rsquo;s on your mind?</span>
+            </button>
+          </>
         )}
 
         {visible.length === 0 ? (
