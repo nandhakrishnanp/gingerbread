@@ -1,1 +1,29 @@
 @import "tailwindcss";
+
+@theme {
+  --color-cream: #fbf4e6;
+  --color-dough: #f1e1c3;
+  --color-sugar: #fffaf0;
+  --color-ginger: #c87a4a;
+  --color-ember: #a35a1f;
+  --color-cocoa: #5b3a24;
+  --color-bark: #2b1b11;
+}
+
+@layer base {
+  :root {
+    color-scheme: light dark;
+  }
+
+  body {
+    background-color: var(--color-cream);
+    color: var(--color-bark);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body {
+      background-color: var(--color-bark);
+      color: var(--color-cream);
+    }
+  }
+}
