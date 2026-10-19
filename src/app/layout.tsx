@@ -1,9 +1,18 @@
 import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+  fallback: ["ui-sans-serif", "system-ui", "Segoe UI", "sans-serif"],
+});
+
 export const metadata: Metadata = {
-  title: "Gingerbread",
-  description: "A private, end-to-end encrypted journal.",
+  title: "Gingerbread — private thoughts, habits & streaks",
+  description:
+    "A private, end-to-end encrypted home for your journal, habits and random thoughts.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
@@ -13,9 +22,12 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fbf4e6" },
-    { media: "(prefers-color-scheme: dark)", color: "#2b1b11" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0b0c" },
   ],
 };
 
@@ -24,8 +36,8 @@ const themeScript = `try{var t=localStorage.getItem('gb-theme');var d=t==='dark'
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="min-h-dvh antialiased">
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
+      <body className="min-h-dvh overflow-x-hidden antialiased">
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         {children}
       </body>

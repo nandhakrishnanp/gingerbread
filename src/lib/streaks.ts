@@ -12,18 +12,19 @@ export function dateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function parseKey(key: string): Date {
+/** Parse a local `YYYY-MM-DD` key back into a local-time Date. */
+export function parseDateKey(key: string): Date {
   const [year, month, day] = key.split("-").map(Number);
   return new Date(year, month - 1, day);
 }
 
-function addDays(date: Date, days: number): Date {
+export function addDays(date: Date, days: number): Date {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
   return next;
 }
 
-function startOfDay(date: Date): Date {
+export function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
@@ -71,7 +72,7 @@ export function longestStreak(counts: Map<string, number>): number {
   let run = 0;
   let previous: Date | null = null;
   for (const key of keys) {
-    const date = parseKey(key);
+    const date = parseDateKey(key);
     if (previous && dateKey(addDays(previous, 1)) === key) run += 1;
     else run = 1;
     if (run > best) best = run;

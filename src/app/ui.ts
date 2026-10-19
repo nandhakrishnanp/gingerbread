@@ -1,19 +1,31 @@
-/** Shared Tailwind class strings so the monochrome thread look stays consistent. */
+/** Shared Tailwind class strings so the black-and-white thread look stays consistent. */
 
 export const inputClass =
-  "w-full rounded-xl border border-black/15 bg-transparent px-3 py-2 text-base text-bark outline-none transition placeholder:opacity-50 focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/20 dark:text-cream dark:focus:border-white dark:focus:ring-white/15";
+  "w-full rounded-2xl border border-smoke bg-mist px-4 py-3 text-base text-ink outline-none transition placeholder:text-ash focus:border-ink focus:bg-paper focus:ring-4 focus:ring-ink/5";
 
 export const primaryButtonClass =
-  "inline-flex items-center justify-center gap-2 rounded-full bg-black px-4 py-2 font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-neutral-200";
+  "inline-flex items-center justify-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-paper transition hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40";
+
+export const accentButtonClass =
+  "inline-flex items-center justify-center gap-2 rounded-full bg-accent-lime px-5 py-3 text-sm font-semibold text-[#09090b] transition hover:brightness-95 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40";
 
 export const ghostButtonClass =
-  "inline-flex items-center gap-2 rounded-full border border-black/15 px-3 py-1.5 text-sm transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10";
+  "inline-flex items-center justify-center gap-2 rounded-full border border-smoke bg-paper px-4 py-2.5 text-sm font-medium text-ink transition hover:bg-mist active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40";
+
+export const iconButtonClass =
+  "grid h-10 w-10 shrink-0 place-items-center rounded-full border border-smoke bg-paper text-ink transition hover:bg-mist active:scale-95 disabled:cursor-not-allowed disabled:opacity-40";
 
 export const dangerButtonClass =
-  "inline-flex items-center gap-2 rounded-full border border-red-500/40 px-3 py-1.5 text-sm text-red-700 transition hover:bg-red-500/10 dark:text-red-300";
+  "inline-flex items-center justify-center gap-2 rounded-full border border-red-500/30 bg-paper px-4 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-500/10 active:scale-[0.98] dark:text-red-300";
 
 export const cardClass =
-  "w-full max-w-md rounded-2xl border border-black/10 bg-white p-8 shadow-sm dark:border-white/15 dark:bg-neutral-950";
+  "w-full max-w-md rounded-[2rem] border border-smoke bg-paper p-6 shadow-[0_18px_50px_-30px_rgba(0,0,0,0.35)] sm:p-8";
 
 export const errorTextClass =
-  "rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300";
+  "rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-300";
+
+export const chipClass =
+  "inline-flex items-center gap-1.5 rounded-full border border-smoke bg-paper px-3 py-1.5 text-xs font-medium text-ink transition hover:bg-mist";
+
+export const labelClass =
+  "text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-ash";

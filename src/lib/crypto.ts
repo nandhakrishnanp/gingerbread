@@ -253,12 +253,16 @@ function entryAad(entryId: string, version: number): Uint8Array {
   return encoder.encode(`${entryId}:${version}`);
 }
 
-/** Encrypt one entry version into a storable ciphertext envelope. */
-export async function encryptEntry(
+/**
+ * Encrypt any JSON value into a storable ciphertext envelope. Journal entries,
+ * thoughts and habits all use this same primitive — only their payload shape
+ * differs, and the server still sees nothing but ciphertext.
+ */
+export async function encryptValue<T>(
   masterKey: Uint8Array,
   entryId: string,
   version: number,
-  plain: EntryPlain,
+  value: T,
 ): Promise<EncryptedBlob> {
   const dataKey = randomBytes(KEY_BYTES);
   const iv = randomBytes(IV_BYTES);
@@ -266,7 +270,7 @@ export async function encryptEntry(
     const ciphertext = await aesGcmEncrypt(
       dataKey,
       iv,
-      encoder.encode(JSON.stringify(plain)),
+      encoder.encode(JSON.stringify(value)),
       entryAad(entryId, version),
     );
     const wrappedKey = await wrapDataKey(masterKey, dataKey, entryId);
@@ -280,13 +284,13 @@ export async function encryptEntry(
   }
 }
 
-/** Decrypt a single entry version. Throws if the master key or AAD is wrong. */
-export async function decryptEntry(
+/** Decrypt a single envelope. Throws if the master key or AAD is wrong. */
+export async function decryptValue<T>(
   masterKey: Uint8Array,
   entryId: string,
   version: number,
   blob: EncryptedBlob,
-): Promise<EntryPlain> {
+): Promise<T> {
   const dataKey = await unwrapDataKey(masterKey, blob.wrappedKey, entryId);
   try {
     const plaintext = await aesGcmDecrypt(
@@ -295,10 +299,32 @@ export async function decryptEntry(
       base64ToBytes(blob.ciphertext),
       entryAad(entryId, version),
     );
-    return normalizeEntry(JSON.parse(decoder.decode(plaintext)));
+    return JSON.parse(decoder.decode(plaintext)) as T;
   } finally {
     zeroize(dataKey);
   }
+}
+
+/** Encrypt one journal entry version into a storable ciphertext envelope. */
+export async function encryptEntry(
+  masterKey: Uint8Array,
+  entryId: string,
+  version: number,
+  plain: EntryPlain,
+): Promise<EncryptedBlob> {
+  return encryptValue(masterKey, entryId, version, plain);
+}
+
+/** Decrypt a single entry version. Throws if the master key or AAD is wrong. */
+export async function decryptEntry(
+  masterKey: Uint8Array,
+  entryId: string,
+  version: number,
+  blob: EncryptedBlob,
+): Promise<EntryPlain> {
+  return normalizeEntry(
+    await decryptValue<unknown>(masterKey, entryId, version, blob),
+  );
 }
 
 /** Coerce decrypted JSON into a known shape (defensive against old data). */

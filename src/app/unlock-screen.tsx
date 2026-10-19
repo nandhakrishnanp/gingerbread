@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { KeyRound, LockKeyhole, ShieldCheck } from "lucide-react";
 import { login, recover } from "@/lib/api-client";
 import {
   bytesToBase64,
@@ -13,7 +14,6 @@ import type { AccountParams } from "@/lib/types";
 import {
   cardClass,
   errorTextClass,
-  ghostButtonClass,
   inputClass,
   primaryButtonClass,
 } from "./ui";
@@ -73,67 +73,116 @@ export function UnlockScreen({ params, onUnlocked }: Props) {
 
   return (
     <div className={cardClass}>
-      <span className="text-4xl" aria-hidden>
-        🍪
+      <span className="grid h-12 w-12 place-items-center rounded-2xl bg-accent-lime text-[#09090b]">
+        <LockKeyhole className="h-6 w-6" strokeWidth={2} aria-hidden />
       </span>
-      <h1 className="mt-3 font-serif text-3xl font-semibold">Welcome back</h1>
-      <p className="mt-2 text-sm opacity-80">
+      <h1 className="mt-4 text-[1.9rem] font-semibold leading-tight tracking-[-0.04em]">
+        Welcome back
+      </h1>
+      <p className="mt-2 text-sm leading-relaxed text-ash">
         {mode === "password"
-          ? "Enter your password to decrypt your journal."
-          : "Enter your recovery key to regain access."}
+          ? "Enter your password. Everything is decrypted in this browser."
+          : "Enter the recovery key you saved when you set up the journal."}
       </p>
+
+      <div
+        className="mt-5 grid grid-cols-2 gap-1 rounded-full border border-smoke bg-mist/70 p-1"
+        role="tablist"
+        aria-label="Unlock method"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === "password"}
+          onClick={() => {
+            setMode("password");
+            setError("");
+          }}
+          className={
+            mode === "password"
+              ? "tap rounded-full bg-paper px-3 py-2 text-xs font-semibold shadow-sm"
+              : "tap rounded-full px-3 py-2 text-xs font-medium text-ash"
+          }
+        >
+          Password
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === "recovery"}
+          onClick={() => {
+            setMode("recovery");
+            setError("");
+          }}
+          className={
+            mode === "recovery"
+              ? "tap rounded-full bg-paper px-3 py-2 text-xs font-semibold shadow-sm"
+              : "tap rounded-full px-3 py-2 text-xs font-medium text-ash"
+          }
+        >
+          Recovery key
+        </button>
+      </div>
 
       {mode === "password" ? (
         <form onSubmit={handlePassword}>
-          <label className="mt-6 block text-sm font-medium">
+          <label className="mt-5 block text-sm font-medium" htmlFor="password">
             Password
             <input
-              className={`${inputClass} mt-1`}
+              id="password"
+              className={`${inputClass} mt-1.5`}
               type="password"
               autoComplete="current-password"
               autoFocus
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(event) => setPassword(event.target.value)}
             />
           </label>
           {error && <p className={`${errorTextClass} mt-4`}>{error}</p>}
-          <button type="submit" disabled={busy} className={`${primaryButtonClass} mt-6 w-full`}>
-            {busy ? "Unlocking…" : "Unlock"}
+          <button
+            type="submit"
+            disabled={busy || !password}
+            className={`${primaryButtonClass} mt-5 w-full`}
+          >
+            {busy ? "Unlocking…" : "Unlock journal"}
           </button>
         </form>
       ) : (
         <form onSubmit={handleRecovery}>
-          <label className="mt-6 block text-sm font-medium">
+          <label
+            className="mt-5 block text-sm font-medium"
+            htmlFor="recovery-key"
+          >
             Recovery key
-            <input
-              className={`${inputClass} mt-1 font-mono`}
-              type="text"
-              spellCheck={false}
-              autoComplete="off"
-              placeholder="XXXX-XXXX-XXXX-…"
-              value={recoveryInput}
-              onChange={(e) => setRecoveryInput(e.target.value)}
-            />
+            <span className="mt-1.5 flex items-center gap-2">
+              <KeyRound className="h-4 w-4 shrink-0 text-ash" aria-hidden />
+              <input
+                id="recovery-key"
+                className={`${inputClass} font-mono text-sm tracking-wider`}
+                type="text"
+                spellCheck={false}
+                autoComplete="off"
+                placeholder="XXXX-XXXX-XXXX-…"
+                value={recoveryInput}
+                onChange={(event) => setRecoveryInput(event.target.value)}
+              />
+            </span>
           </label>
           {error && <p className={`${errorTextClass} mt-4`}>{error}</p>}
-          <button type="submit" disabled={busy} className={`${primaryButtonClass} mt-6 w-full`}>
+          <button
+            type="submit"
+            disabled={busy || !recoveryInput.trim()}
+            className={`${primaryButtonClass} mt-5 w-full`}
+          >
             {busy ? "Unlocking…" : "Unlock with recovery key"}
           </button>
         </form>
       )}
 
-      <button
-        type="button"
-        className={`${ghostButtonClass} mt-5 w-full justify-center`}
-        onClick={() => {
-          setMode((m) => (m === "password" ? "recovery" : "password"));
-          setError("");
-        }}
-      >
-        {mode === "password"
-          ? "Forgot password? Use recovery key"
-          : "Back to password"}
-      </button>
+      <p className="mt-5 flex items-center justify-center gap-1.5 text-[0.66rem] text-ash">
+        <ShieldCheck className="h-3 w-3" aria-hidden />
+        Your key never leaves this device.
+      </p>
     </div>
   );
 }

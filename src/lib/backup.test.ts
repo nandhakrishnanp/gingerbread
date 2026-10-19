@@ -56,9 +56,30 @@ describe("entriesToMarkdown", () => {
 });
 
 describe("encrypted backup", () => {
-  it("round-trips records", () => {
-    const text = entriesToBackup([record]);
-    expect(parseBackup(text)).toEqual([record]);
+  it("round-trips entries and vault records", () => {
+    const vault = [
+      {
+        id: "habit-1",
+        kind: "habit" as const,
+        createdAt: "2026-02-03T08:00:00.000Z",
+        updatedAt: "2026-02-03T09:00:00.000Z",
+        version: 1,
+        cryptoVersion: 1,
+        iv: "aXY=",
+        wrappedKey: "d3JhcA==",
+        ciphertext: "Y2lwaGVy",
+      },
+    ];
+    const text = entriesToBackup([record], vault);
+    expect(parseBackup(text)).toEqual({ entries: [record], vault });
+  });
+
+  it("reads older backups that only contain entries", () => {
+    const text = JSON.stringify({
+      kind: "encrypted-backup",
+      entries: [record],
+    });
+    expect(parseBackup(text)).toEqual({ entries: [record], vault: [] });
   });
 
   it("rejects foreign JSON", () => {

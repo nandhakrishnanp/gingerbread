@@ -47,5 +47,27 @@ export const updateEntrySchema = z.object({
   ciphertext: b64,
 });
 
+export const vaultKindSchema = z.enum(["thought", "habit"]);
+
+export const createVaultSchema = z.object({
+  id: z.string().uuid(),
+  kind: vaultKindSchema,
+  version: z.number().int().nonnegative().optional(),
+  cryptoVersion: cryptoVersionSchema,
+  iv: b64,
+  wrappedKey: b64,
+  ciphertext: b64,
+});
+
+export const updateVaultSchema = z.object({
+  version: z.number().int().nonnegative(),
+  cryptoVersion: cryptoVersionSchema,
+  iv: b64,
+  wrappedKey: b64,
+  ciphertext: b64,
+});
+
 export type CreateEntryInput = z.infer<typeof createEntrySchema>;
 export type UpdateEntryInput = z.infer<typeof updateEntrySchema>;
+export type CreateVaultInput = z.infer<typeof createVaultSchema>;
+export type UpdateVaultInput = z.infer<typeof updateVaultSchema>;

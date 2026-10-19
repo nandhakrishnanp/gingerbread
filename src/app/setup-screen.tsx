@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Check, Copy, KeyRound, LockKeyhole } from "lucide-react";
 import { setupAccount } from "@/lib/api-client";
 import { CRYPTO_VERSION } from "@/lib/constants";
 import {
@@ -84,15 +85,22 @@ export function SetupScreen({ params, onDone }: Props) {
   if (step === "recovery") {
     return (
       <div className={cardClass}>
-        <h1 className="font-serif text-3xl font-semibold">Your recovery key</h1>
-        <p className="mt-3 text-pretty text-sm opacity-80">
+        <span className="grid h-12 w-12 place-items-center rounded-2xl bg-accent-lime text-[#09090b]">
+          <KeyRound className="h-6 w-6" strokeWidth={2} aria-hidden />
+        </span>
+        <h1 className="mt-4 text-[1.9rem] font-semibold leading-tight tracking-[-0.04em]">
+          Your recovery key
+        </h1>
+        <p className="mt-2 text-sm leading-relaxed text-ash">
           This is the only way back in if you forget your password. Write it down
           and store it somewhere safe. It is shown{" "}
-          <strong>once and never again</strong>.
+          <strong className="text-ink">once and never again</strong>.
         </p>
-        <p className="mt-5 break-words rounded-lg border border-black/10 bg-black/5 px-4 py-3 font-mono text-lg tracking-wider text-bark dark:border-white/15 dark:bg-white/10 dark:text-cream">
+
+        <p className="mt-5 break-words rounded-2xl border border-smoke bg-mist px-4 py-3 font-mono text-base leading-relaxed tracking-wider text-ink">
           {recoveryKey}
         </p>
+
         <button
           type="button"
           className={`${ghostButtonClass} mt-3`}
@@ -101,15 +109,20 @@ export function SetupScreen({ params, onDone }: Props) {
             setCopied(true);
           }}
         >
-          {copied ? "Copied ✓" : "Copy to clipboard"}
+          {copied ? (
+            <Check className="h-3.5 w-3.5" aria-hidden />
+          ) : (
+            <Copy className="h-3.5 w-3.5" aria-hidden />
+          )}
+          {copied ? "Copied" : "Copy to clipboard"}
         </button>
 
-        <label className="mt-6 flex items-start gap-3 text-sm">
+        <label className="mt-6 flex items-start gap-3 rounded-2xl bg-mist/60 p-3 text-sm">
           <input
             type="checkbox"
-            className="mt-1"
+            className="mt-0.5 h-4 w-4 accent-[#09090b]"
             checked={acknowledged}
-            onChange={(e) => setAcknowledged(e.target.checked)}
+            onChange={(event) => setAcknowledged(event.target.checked)}
           />
           <span>I have saved my recovery key somewhere safe.</span>
         </label>
@@ -117,7 +130,7 @@ export function SetupScreen({ params, onDone }: Props) {
         <button
           type="button"
           disabled={!acknowledged || !masterKey}
-          className={`${primaryButtonClass} mt-6 w-full`}
+          className={`${primaryButtonClass} mt-5 w-full`}
           onClick={() => masterKey && onDone(masterKey)}
         >
           Enter my journal
@@ -128,13 +141,13 @@ export function SetupScreen({ params, onDone }: Props) {
 
   return (
     <form className={cardClass} onSubmit={handleSubmit}>
-      <span className="text-4xl" aria-hidden>
-        🍪
+      <span className="grid h-12 w-12 place-items-center rounded-2xl bg-ink text-paper">
+        <LockKeyhole className="h-6 w-6" strokeWidth={2} aria-hidden />
       </span>
-      <h1 className="mt-3 font-serif text-3xl font-semibold">
+      <h1 className="mt-4 text-[1.9rem] font-semibold leading-tight tracking-[-0.04em]">
         Create your journal
       </h1>
-      <p className="mt-2 text-sm opacity-80">
+      <p className="mt-2 text-sm leading-relaxed text-ash">
         Choose a password. It encrypts everything in your browser — we can never
         read it, and no one can reset it.
       </p>
@@ -142,22 +155,22 @@ export function SetupScreen({ params, onDone }: Props) {
       <label className="mt-6 block text-sm font-medium">
         Password
         <input
-          className={`${inputClass} mt-1`}
+          className={`${inputClass} mt-1.5`}
           type="password"
           autoComplete="new-password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(event) => setPassword(event.target.value)}
         />
       </label>
 
       <label className="mt-4 block text-sm font-medium">
         Confirm password
         <input
-          className={`${inputClass} mt-1`}
+          className={`${inputClass} mt-1.5`}
           type="password"
           autoComplete="new-password"
           value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
+          onChange={(event) => setConfirm(event.target.value)}
         />
       </label>
 

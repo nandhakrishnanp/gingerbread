@@ -1,4 +1,4 @@
-import type { DecryptedEntry, EntryRecord } from "./types";
+import type { DecryptedEntry, EntryRecord, VaultRecord } from "./types";
 
 // ---------------------------------------------------------------------------
 // Pure builders (unit-testable, no DOM)
@@ -34,16 +34,28 @@ export function entriesToMarkdown(entries: DecryptedEntry[]): string {
     .join("\n");
 }
 
-/** Serialise ciphertext records into an encrypted JSON backup document. */
-export function entriesToBackup(records: EntryRecord[]): string {
+export interface BackupContents {
+  entries: EntryRecord[];
+  vault: VaultRecord[];
+}
+
+/**
+ * Serialise ciphertext records into an encrypted JSON backup document.
+ * `vault` holds thoughts and habits; older backups simply omit it.
+ */
+export function entriesToBackup(
+  records: EntryRecord[],
+  vault: VaultRecord[] = [],
+): string {
   return JSON.stringify(
     {
       app: "gingerbread",
       kind: "encrypted-backup",
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
-      count: records.length,
+      count: records.length + vault.length,
       entries: records,
+      vault,
     },
     null,
     2,
@@ -51,18 +63,21 @@ export function entriesToBackup(records: EntryRecord[]): string {
 }
 
 /** Validate and extract records from a backup document. */
-export function parseBackup(text: string): EntryRecord[] {
+export function parseBackup(text: string): BackupContents {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch {
     throw new Error("Not a valid JSON backup file");
   }
-  const doc = parsed as { kind?: string; entries?: unknown };
+  const doc = parsed as { kind?: string; entries?: unknown; vault?: unknown };
   if (doc.kind !== "encrypted-backup" || !Array.isArray(doc.entries)) {
     throw new Error("Not a Gingerbread encrypted backup");
   }
-  return doc.entries as EntryRecord[];
+  return {
+    entries: doc.entries as EntryRecord[],
+    vault: Array.isArray(doc.vault) ? (doc.vault as VaultRecord[]) : [],
+  };
 }
 
 /** Newest first, by journal date then last update. */
@@ -101,11 +116,14 @@ export function exportMarkdown(entries: DecryptedEntry[]): void {
   );
 }
 
-export function exportEncryptedJson(records: EntryRecord[]): void {
+export function exportEncryptedJson(
+  records: EntryRecord[],
+  vault: VaultRecord[] = [],
+): void {
   const stamp = new Date().toISOString().slice(0, 10);
   downloadText(
     `gingerbread-backup-${stamp}.json`,
-    entriesToBackup(records),
+    entriesToBackup(records, vault),
     "application/json",
   );
 }

@@ -1,5 +1,5 @@
 import type { Kdf } from "./constants";
-import type { EntryRecord } from "./types";
+import type { EntryRecord, VaultKind, VaultRecord } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -143,4 +143,56 @@ export async function fetchRevisions(id: string): Promise<EntryRecord[]> {
     `/api/entries/${id}/revisions`,
   );
   return revisions;
+}
+
+/** Encrypted thoughts and habits, newest first. */
+export async function fetchVaultRecords(kind?: VaultKind): Promise<VaultRecord[]> {
+  const suffix = kind ? `?kind=${kind}` : "";
+  const { records } = await request<{ records: VaultRecord[] }>(
+    `/api/vault${suffix}`,
+  );
+  return records;
+}
+
+export interface NewVaultPayload {
+  id: string;
+  kind: VaultKind;
+  version?: number;
+  cryptoVersion: number;
+  iv: string;
+  wrappedKey: string;
+  ciphertext: string;
+}
+
+export async function createVaultRecord(
+  payload: NewVaultPayload,
+): Promise<VaultRecord> {
+  const { record } = await request<{ record: VaultRecord }>("/api/vault", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return record;
+}
+
+export interface UpdateVaultPayload {
+  version: number;
+  cryptoVersion: number;
+  iv: string;
+  wrappedKey: string;
+  ciphertext: string;
+}
+
+export async function updateVaultRecord(
+  id: string,
+  payload: UpdateVaultPayload,
+): Promise<VaultRecord> {
+  const { record } = await request<{ record: VaultRecord }>(
+    `/api/vault/${id}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+  );
+  return record;
+}
+
+export async function deleteVaultRecord(id: string): Promise<void> {
+  await request(`/api/vault/${id}`, { method: "DELETE" });
 }

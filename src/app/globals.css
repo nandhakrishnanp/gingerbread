@@ -1,38 +1,105 @@
 @import "tailwindcss";
 
 @theme {
-  /* Monochrome "thread" palette: everything runs black → white → grey. */
+  /* Monochrome foundation. Everything is ink on paper — the fun lives in the
+     accents below. */
   --color-cream: #ffffff;
   --color-dough: #f4f4f5;
   --color-sugar: #ffffff;
-  --color-ginger: #a1a1aa;
+  --color-ginger: #d4d4d8;
   --color-ember: #18181b;
   --color-cocoa: #71717a;
   --color-bark: #09090b;
+
+  /* Funky highlights used sparingly: streaks, habits, little moments. */
+  --color-accent-lime: #c9f75a;
+  --color-accent-green: #7fd12f;
+  --color-accent-butter: #ffd86b;
+  --color-accent-pink: #ff9ec7;
+  --color-accent-sky: #9ad4ff;
+  --color-accent-orange: #ffab73;
+  --color-accent-lilac: #c9b8ff;
+  --color-accent-mint: #9df1c7;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-serif: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* Semantic colours switch with the theme and generate utilities such as
+   `bg-paper`, `text-ink`, `border-smoke`, `text-ash`. */
+@theme inline {
+  --color-paper: var(--gb-paper);
+  --color-ink: var(--gb-ink);
+  --color-mist: var(--gb-mist);
+  --color-smoke: var(--gb-smoke);
+  --color-ash: var(--gb-ash);
 }
 
 /* Dark mode is driven by a `.dark` class on <html> (set by the theme script and
-   ThemeToggle, from an explicit choice or the system preference), so `dark:`
-   utilities and the base colours always agree. */
+   ThemeToggle, from an explicit choice or the system preference). */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
   :root {
     color-scheme: light;
+    --gb-paper: #ffffff;
+    --gb-ink: #0a0a0a;
+    --gb-mist: #f4f4f5;
+    --gb-smoke: #e4e4e7;
+    --gb-ash: #71717a;
   }
 
   :root.dark {
     color-scheme: dark;
+    --gb-paper: #0b0b0c;
+    --gb-ink: #fafafa;
+    --gb-mist: #17171a;
+    --gb-smoke: #2b2b30;
+    --gb-ash: #a1a1aa;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
   }
 
   body {
-    background-color: var(--color-cream);
-    color: var(--color-bark);
+    min-height: 100dvh;
+    background-color: var(--gb-paper);
+    color: var(--gb-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    text-rendering: optimizeLegibility;
   }
 
   :root.dark body {
-    background-color: var(--color-bark);
-    color: var(--color-cream);
+    background-color: var(--gb-paper);
+    color: var(--gb-ink);
+  }
+
+  ::selection {
+    background: var(--color-accent-lime);
+    color: #09090b;
+  }
+
+  :where(button, a, input, textarea, select):focus-visible {
+    outline: 2px solid var(--gb-ink);
+    outline-offset: 2px;
+  }
+
+  input,
+  textarea,
+  button,
+  select {
+    font: inherit;
+  }
+
+  /* Keyboard-only users still get a clear lime ring on accent surfaces. */
+  :root.dark ::selection {
+    color: #09090b;
   }
 }
 
@@ -48,9 +115,10 @@
   .prose-gingerbread h1,
   .prose-gingerbread h2,
   .prose-gingerbread h3 {
-    font-family: var(--font-serif, ui-serif, Georgia, serif);
-    font-weight: 600;
-    line-height: 1.25;
+    font-family: var(--font-sans);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
   }
   .prose-gingerbread h1 {
     font-size: 1.6rem;
@@ -72,21 +140,22 @@
   }
 
   .prose-gingerbread blockquote {
-    border-left: 3px solid var(--color-cocoa);
+    border-left: 3px solid var(--gb-ink);
     padding-left: 1rem;
     font-style: italic;
     opacity: 0.85;
   }
 
   .prose-gingerbread code {
-    background: color-mix(in srgb, var(--color-cocoa) 18%, transparent);
+    background: var(--gb-mist);
     border-radius: 0.35rem;
     padding: 0.1rem 0.35rem;
+    font-family: var(--font-mono);
     font-size: 0.9em;
   }
 
   .prose-gingerbread pre {
-    background: color-mix(in srgb, var(--color-cocoa) 15%, transparent);
+    background: var(--gb-mist);
     border-radius: 0.75rem;
     padding: 1rem;
     overflow-x: auto;
@@ -100,6 +169,218 @@
   .prose-gingerbread a {
     color: inherit;
     text-decoration: underline;
-    text-underline-offset: 2px;
+    text-underline-offset: 3px;
+  }
+
+  .prose-gingerbread img {
+    border-radius: 1rem;
+  }
+}
+
+@layer utilities {
+  .safe-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 0.75rem);
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .tap {
+    transition:
+      transform 120ms ease,
+      background-color 160ms ease,
+      color 160ms ease,
+      border-color 160ms ease,
+      opacity 160ms ease;
+  }
+  .tap:active {
+    transform: scale(0.97);
+  }
+
+  .animate-flame {
+    animation: flame-flicker 2.6s ease-in-out infinite;
+    transform-origin: 50% 88%;
+  }
+
+  .animate-flame-fast {
+    animation: flame-flicker 1.6s ease-in-out infinite;
+    transform-origin: 50% 88%;
+  }
+
+  .animate-glow {
+    animation: flame-glow 2.6s ease-in-out infinite;
+  }
+
+  .animate-pop {
+    animation: pop-in 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  .animate-rise {
+    animation: rise-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .animate-view {
+    animation: view-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .animate-check {
+    animation: check-pop 480ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  .animate-burst {
+    animation: ring-burst 600ms ease-out both;
+  }
+
+  .animate-ember {
+    animation: ember-rise 2.4s ease-out infinite;
+  }
+
+  .stagger > * {
+    animation: rise-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .stagger > *:nth-child(1) {
+    animation-delay: 20ms;
+  }
+  .stagger > *:nth-child(2) {
+    animation-delay: 55ms;
+  }
+  .stagger > *:nth-child(3) {
+    animation-delay: 90ms;
+  }
+  .stagger > *:nth-child(4) {
+    animation-delay: 125ms;
+  }
+  .stagger > *:nth-child(5) {
+    animation-delay: 160ms;
+  }
+  .stagger > *:nth-child(6) {
+    animation-delay: 195ms;
+  }
+  .stagger > *:nth-child(7) {
+    animation-delay: 230ms;
+  }
+  .stagger > *:nth-child(8) {
+    animation-delay: 265ms;
+  }
+}
+
+@keyframes flame-flicker {
+  0%,
+  100% {
+    transform: scale(1) rotate(-1.5deg);
+  }
+  25% {
+    transform: scale(1.05, 0.96) rotate(1.5deg);
+  }
+  50% {
+    transform: scale(0.97, 1.04) rotate(-2deg);
+  }
+  75% {
+    transform: scale(1.03, 0.99) rotate(1deg);
+  }
+}
+
+@keyframes flame-glow {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes check-pop {
+  0% {
+    transform: scale(0.6);
+  }
+  55% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes ring-burst {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.55);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+@keyframes ember-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6);
+  }
+  25% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-28px) scale(0.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

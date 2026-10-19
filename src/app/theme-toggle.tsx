@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
+import { Monitor, Moon, Sun } from "lucide-react";
 
 type Theme = "light" | "dark" | "system";
 
@@ -12,7 +13,8 @@ const LABEL: Record<Theme, string> = {
   dark: "Dark",
   system: "System",
 };
-const ICON: Record<Theme, string> = { light: "☀️", dark: "🌙", system: "🍪" };
+
+const ORDER: Theme[] = ["light", "dark", "system"];
 
 function isTheme(value: string | null): value is Theme {
   return value === "light" || value === "dark" || value === "system";
@@ -40,8 +42,13 @@ function applyTheme(theme: Theme) {
   document.documentElement.classList.toggle("dark", dark);
 }
 
+/** One compact round button that cycles light → dark → system. */
 export function ThemeToggle() {
-  const theme = useSyncExternalStore(subscribe, readSnapshot, () => "system" as Theme);
+  const theme = useSyncExternalStore(
+    subscribe,
+    readSnapshot,
+    () => "system" as Theme,
+  );
 
   useEffect(() => {
     applyTheme(theme);
@@ -58,17 +65,22 @@ export function ThemeToggle() {
     window.dispatchEvent(new Event(EVENT));
   }
 
+  function cycle() {
+    const index = ORDER.indexOf(theme);
+    change(ORDER[(index + 1) % ORDER.length]);
+  }
+
+  const Icon = theme === "light" ? Sun : theme === "dark" ? Moon : Monitor;
+
   return (
     <button
       type="button"
-      onClick={() =>
-        change(theme === "light" ? "dark" : theme === "dark" ? "system" : "light")
-      }
-      className="inline-flex items-center gap-1.5 rounded-full border border-black/15 px-3 py-1.5 text-sm transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-      title={`Theme: ${LABEL[theme]} (click to change)`}
+      onClick={cycle}
+      aria-label={`Theme: ${LABEL[theme]}. Tap to change.`}
+      title={`Theme: ${LABEL[theme]}`}
+      className="tap grid h-10 w-10 shrink-0 place-items-center rounded-full border border-smoke bg-paper text-ink transition hover:bg-mist"
     >
-      <span aria-hidden>{ICON[theme]}</span>
-      <span className="hidden sm:inline">{LABEL[theme]}</span>
+      <Icon className="h-4 w-4" strokeWidth={2} aria-hidden />
     </button>
   );
 }

@@ -32,6 +32,23 @@ export interface EntryDoc {
   ciphertext: string; // base64 AES-GCM ciphertext of the entry JSON
 }
 
+/**
+ * An encrypted vault item. `kind` is the only piece of metadata that reveals
+ * what a blob is (a thought or a habit); its content stays ciphertext.
+ */
+export interface VaultDoc {
+  _id: string; // random uuid
+  userId: string;
+  kind: "thought" | "habit";
+  createdAt: Date;
+  updatedAt: Date;
+  version: number;
+  cryptoVersion: number;
+  iv: string;
+  wrappedKey: string;
+  ciphertext: string;
+}
+
 /** A prior revision of an entry, kept for undo (last ~10 per entry). */
 export interface EntryRevisionDoc {
   _id: string;
@@ -57,12 +74,18 @@ export async function entryRevisions(): Promise<Collection<EntryRevisionDoc>> {
   return (await getDb()).collection<EntryRevisionDoc>("entry_revisions");
 }
 
+export async function vaultRecords(): Promise<Collection<VaultDoc>> {
+  return (await getDb()).collection<VaultDoc>("vault_records");
+}
+
 /** Create the indexes the app relies on. Safe to call repeatedly. */
 export async function ensureIndexes(): Promise<void> {
-  const [entriesCol, revisionsCol] = await Promise.all([
+  const [entriesCol, revisionsCol, vaultCol] = await Promise.all([
     entries(),
     entryRevisions(),
+    vaultRecords(),
   ]);
   await entriesCol.createIndex({ userId: 1, date: -1 });
   await revisionsCol.createIndex({ entryId: 1, version: -1 });
+  await vaultCol.createIndex({ userId: 1, kind: 1, createdAt: -1 });
 }

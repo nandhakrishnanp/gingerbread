@@ -1,9 +1,29 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  Cookie,
+  Download,
+  FileText,
+  Lock,
+  LogOut,
+  MoreHorizontal,
+  Upload,
+} from "lucide-react";
 import * as api from "@/lib/api-client";
-import { AUTOLOCK_IDLE_MS, AUTOSAVE_DEBOUNCE_MS, CRYPTO_VERSION } from "@/lib/constants";
-import { decryptEntry, encryptEntry } from "@/lib/crypto";
+import {
+  AUTOLOCK_IDLE_MS,
+  AUTOSAVE_DEBOUNCE_MS,
+  CRYPTO_VERSION,
+} from "@/lib/constants";
+import { decryptEntry, decryptValue, encryptEntry, encryptValue } from "@/lib/crypto";
 import {
   exportEncryptedJson,
   exportMarkdown,
@@ -12,17 +32,52 @@ import {
   parseBackup,
 } from "@/lib/backup";
 import { buildSearchIndex } from "@/lib/search";
-import type { DecryptedEntry, Draft, EntryRecord } from "@/lib/types";
-import { ActivityHeatmap } from "./activity-heatmap";
+import {
+  currentStreak,
+  dateKey,
+  entryCountsByDate,
+} from "@/lib/streaks";
+import {
+  normalizeCompletions,
+  toggleCompletion,
+  type HabitColorKey,
+  type HabitIconKey,
+} from "@/lib/habits";
+import type {
+  DecryptedEntry,
+  DecryptedHabit,
+  DecryptedThought,
+  Draft,
+  EntryPlain,
+  EntryRecord,
+  HabitPlain,
+  ThoughtPlain,
+  VaultRecord,
+} from "@/lib/types";
 import { EntryEditor, type HistoryItem, type SaveStatus } from "./entry-editor";
 import { ThemeToggle } from "./theme-toggle";
-import { ghostButtonClass, inputClass, primaryButtonClass } from "./ui";
+import { BottomNav, type View } from "./views/bottom-nav";
+import { JournalView } from "./views/journal-view";
+import { StreakView } from "./views/streak-view";
+import { HabitsView } from "./views/habits-view";
+import { ThoughtsView } from "./views/thoughts-view";
+import { Sheet } from "./sheet";
+import { Flame } from "./flame";
+import { iconButtonClass } from "./ui";
+import { cn } from "./cn";
 
 interface Props {
   masterKey: Uint8Array;
   onLock: () => void;
   onLogout: () => void;
 }
+
+const VIEW_TITLES: Record<View, string> = {
+  journal: "Journal",
+  habits: "Habits",
+  streak: "Streak",
+  thoughts: "Thoughts",
+};
 
 function isDirty(draft: Draft, saved: DecryptedEntry): boolean {
   return (
@@ -34,7 +89,7 @@ function isDirty(draft: Draft, saved: DecryptedEntry): boolean {
   );
 }
 
-function toDecrypted(record: EntryRecord, plain: { title: string; markdown: string; tags: string[] }): DecryptedEntry {
+function toDecrypted(record: EntryRecord, plain: EntryPlain): DecryptedEntry {
   return {
     ...plain,
     id: record.id,
@@ -46,14 +101,53 @@ function toDecrypted(record: EntryRecord, plain: { title: string; markdown: stri
   };
 }
 
+function toThought(record: VaultRecord, plain: ThoughtPlain): DecryptedThought {
+  return {
+    id: record.id,
+    text: plain.text,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    version: record.version,
+    cryptoVersion: record.cryptoVersion,
+  };
+}
+
+function toHabit(record: VaultRecord, plain: HabitPlain): DecryptedHabit {
+  return {
+    id: record.id,
+    name: plain.name,
+    icon: plain.icon,
+    color: plain.color,
+    completions: normalizeCompletions(plain.completions),
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    version: record.version,
+    cryptoVersion: record.cryptoVersion,
+  };
+}
+
+function viewFromHash(): View {
+  if (typeof window === "undefined") return "journal";
+  const value = window.location.hash.replace(/^#\/?/, "");
+  return value === "habits" || value === "streak" || value === "thoughts"
+    ? value
+    : "journal";
+}
+
 export function Journal({ masterKey, onLock, onLogout }: Props) {
   const [entries, setEntries] = useState<DecryptedEntry[]>([]);
   const [records, setRecords] = useState<EntryRecord[]>([]);
+  const [vault, setVault] = useState<VaultRecord[]>([]);
+  const [thoughts, setThoughts] = useState<DecryptedThought[]>([]);
+  const [habits, setHabits] = useState<DecryptedHabit[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [toast, setToast] = useState("");
 
+  const [view, setView] = useState<View>("journal");
   const [query, setQuery] = useState("");
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [dayFilter, setDayFilter] = useState<string | null>(null);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -64,6 +158,7 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [habitBusy, setHabitBusy] = useState<Set<string>>(new Set());
 
   const entriesRef = useRef(entries);
   const draftRef = useRef(draft);
@@ -75,8 +170,37 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
   useEffect(() => void (draftRef.current = draft), [draft]);
   useEffect(() => void (selectedIdRef.current = selectedId), [selectedId]);
 
+  useEffect(() => {
+    const sync = () => setView(viewFromHash());
+    sync();
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(""), 4200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const navigate = useCallback((next: View) => {
+    setView(next);
+    const nextHash = `#/${next}`;
+    if (window.location.hash !== nextHash) {
+      window.history.replaceState(null, "", nextHash);
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
   const load = useCallback(async () => {
-    const recs = await api.fetchEntries();
+    const [recs, vaultRecords] = await Promise.all([
+      api.fetchEntries(),
+      api.fetchVaultRecords().catch((err) => {
+        console.warn("[journal] vault unavailable", err);
+        return [] as VaultRecord[];
+      }),
+    ]);
+
     const decrypted: DecryptedEntry[] = [];
     for (const record of recs) {
       try {
@@ -86,8 +210,55 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
         console.warn("[journal] skipping unreadable entry", record.id);
       }
     }
+
+    const nextThoughts: DecryptedThought[] = [];
+    const nextHabits: DecryptedHabit[] = [];
+    for (const record of vaultRecords) {
+      try {
+        if (record.kind === "thought") {
+          const plain = await decryptValue<ThoughtPlain>(
+            masterKey,
+            record.id,
+            record.version,
+            record,
+          );
+          if (plain && typeof plain.text === "string") {
+            nextThoughts.push(toThought(record, plain));
+          }
+        } else {
+          const plain = await decryptValue<HabitPlain>(
+            masterKey,
+            record.id,
+            record.version,
+            record,
+          );
+          nextHabits.push(
+            toHabit(record, {
+              name:
+                plain && typeof plain.name === "string"
+                  ? plain.name
+                  : "Untitled habit",
+              icon:
+                plain && typeof plain.icon === "string" ? plain.icon : "flame",
+              color:
+                plain && typeof plain.color === "string" ? plain.color : "lime",
+              completions: normalizeCompletions(plain?.completions),
+            }),
+          );
+        }
+      } catch {
+        console.warn("[journal] skipping unreadable vault item", record.id);
+      }
+    }
+
+    nextThoughts.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    nextHabits.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+
     setRecords(recs);
     setEntries(decrypted);
+    setVault(vaultRecords);
+    setThoughts(nextThoughts);
+    setHabits(nextHabits);
   }, [masterKey]);
 
   useEffect(() => {
@@ -96,7 +267,13 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
     // resolves, not synchronously during this effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load()
-      .catch((err) => active && setLoadError(err instanceof Error ? err.message : "Failed to load"))
+      .catch((err) =>
+        active
+          ? setLoadError(
+              err instanceof Error ? err.message : "Failed to load your journal",
+            )
+          : undefined,
+      )
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
@@ -118,7 +295,6 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
       "touchstart",
     ];
     events.forEach((event) => window.addEventListener(event, reset, { passive: true }));
-    // Lock when the tab is hidden for good (close/back-forward cache).
     window.addEventListener("pagehide", onLock);
     reset();
     return () => {
@@ -127,6 +303,11 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
       window.removeEventListener("pagehide", onLock);
     };
   }, [onLock]);
+
+  const streak = useMemo(
+    () => currentStreak(entryCountsByDate(entries)),
+    [entries],
+  );
 
   const allTags = useMemo(() => {
     const counts = new Map<string, number>();
@@ -145,24 +326,22 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
       list = list.filter((entry) => ids.has(entry.id));
     }
     if (activeTag) list = list.filter((entry) => entry.tags.includes(activeTag));
+    if (dayFilter) list = list.filter((entry) => entry.date === dayFilter);
     return orderEntries(list);
-  }, [entries, query, activeTag, index]);
+  }, [entries, query, activeTag, dayFilter, index]);
 
-  const selectEntry = useCallback(
-    (entry: DecryptedEntry) => {
-      setSelectedId(entry.id);
-      setDraft({
-        title: entry.title,
-        markdown: entry.markdown,
-        tags: [...entry.tags],
-        date: entry.date,
-      });
-      setStatus("saved");
-      setHistoryOpen(false);
-      setHistory([]);
-    },
-    [],
-  );
+  const selectEntry = useCallback((entry: DecryptedEntry) => {
+    setSelectedId(entry.id);
+    setDraft({
+      title: entry.title,
+      markdown: entry.markdown,
+      tags: [...entry.tags],
+      date: entry.date,
+    });
+    setStatus("saved");
+    setHistoryOpen(false);
+    setHistory([]);
+  }, []);
 
   const save = useCallback(async () => {
     const id = selectedIdRef.current;
@@ -244,12 +423,12 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
     };
   }, [selectedId]);
 
-  async function createEntry() {
+  const createEntry = useCallback(async () => {
     setBusy(true);
     try {
       const id = crypto.randomUUID();
-      const date = new Date().toISOString().slice(0, 10);
-      const plain = { title: "", markdown: "", tags: [] };
+      const date = dayFilter ?? dateKey(new Date());
+      const plain: EntryPlain = { title: "", markdown: "", tags: [] };
       const blob = await encryptEntry(masterKey, id, 0, plain);
       const record = await api.createEntryRecord({
         id,
@@ -261,21 +440,27 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
       const decrypted = toDecrypted(record, plain);
       setRecords((prev) => [record, ...prev]);
       setEntries((prev) => [decrypted, ...prev]);
+      setView("journal");
+      window.history.replaceState(null, "", "#/journal");
       selectEntry(decrypted);
     } catch (err) {
-      console.error(err);
+      setToast(err instanceof Error ? err.message : "Could not start a new entry.");
     } finally {
       setBusy(false);
     }
-  }
+  }, [masterKey, dayFilter, selectEntry]);
 
   async function deleteEntry(id: string) {
-    await api.deleteEntryRecord(id);
-    setEntries((prev) => prev.filter((entry) => entry.id !== id));
-    setRecords((prev) => prev.filter((record) => record.id !== id));
-    if (selectedIdRef.current === id) {
-      setSelectedId(null);
-      setDraft(null);
+    try {
+      await api.deleteEntryRecord(id);
+      setEntries((prev) => prev.filter((entry) => entry.id !== id));
+      setRecords((prev) => prev.filter((record) => record.id !== id));
+      if (selectedIdRef.current === id) {
+        setSelectedId(null);
+        setDraft(null);
+      }
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "Could not delete the entry.");
     }
   }
 
@@ -315,13 +500,196 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
     setHistoryOpen(false);
   }
 
+  // -------------------------------------------------------------------------
+  // Thoughts
+  // -------------------------------------------------------------------------
+
+  const createThought = useCallback(
+    async (text: string) => {
+      const id = crypto.randomUUID();
+      const plain: ThoughtPlain = { text };
+      const blob = await encryptValue(masterKey, id, 0, plain);
+      const record = await api.createVaultRecord({
+        id,
+        kind: "thought",
+        version: 0,
+        cryptoVersion: CRYPTO_VERSION,
+        ...blob,
+      });
+      setVault((prev) => [record, ...prev]);
+      setThoughts((prev) => [toThought(record, plain), ...prev]);
+    },
+    [masterKey],
+  );
+
+  const updateThought = useCallback(
+    async (id: string, text: string) => {
+      const thought = thoughts.find((item) => item.id === id);
+      if (!thought) return;
+      const version = thought.version + 1;
+      const plain: ThoughtPlain = { text };
+      const blob = await encryptValue(masterKey, id, version, plain);
+      const record = await api.updateVaultRecord(id, {
+        version,
+        cryptoVersion: CRYPTO_VERSION,
+        ...blob,
+      });
+      setVault((prev) => prev.map((item) => (item.id === id ? record : item)));
+      setThoughts((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                text,
+                version: record.version,
+                updatedAt: record.updatedAt,
+              }
+            : item,
+        ),
+      );
+    },
+    [masterKey, thoughts],
+  );
+
+  const deleteThought = useCallback(async (id: string) => {
+    await api.deleteVaultRecord(id);
+    setVault((prev) => prev.filter((item) => item.id !== id));
+    setThoughts((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
+  // -------------------------------------------------------------------------
+  // Habits
+  // -------------------------------------------------------------------------
+
+  const markHabitBusy = useCallback((id: string, value: boolean) => {
+    setHabitBusy((prev) => {
+      const next = new Set(prev);
+      if (value) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const createHabit = useCallback(
+    async (input: {
+      name: string;
+      icon: HabitIconKey;
+      color: HabitColorKey;
+    }) => {
+      const id = crypto.randomUUID();
+      const plain: HabitPlain = { ...input, completions: [] };
+      const blob = await encryptValue(masterKey, id, 0, plain);
+      const record = await api.createVaultRecord({
+        id,
+        kind: "habit",
+        version: 0,
+        cryptoVersion: CRYPTO_VERSION,
+        ...blob,
+      });
+      setVault((prev) => [...prev, record]);
+      setHabits((prev) => [...prev, toHabit(record, plain)]);
+    },
+    [masterKey],
+  );
+
+  const updateHabit = useCallback(
+    async (
+      id: string,
+      input: { name: string; icon: HabitIconKey; color: HabitColorKey },
+    ) => {
+      const habit = habits.find((item) => item.id === id);
+      if (!habit) return;
+      const version = habit.version + 1;
+      const plain: HabitPlain = { ...input, completions: habit.completions };
+      const blob = await encryptValue(masterKey, id, version, plain);
+      const record = await api.updateVaultRecord(id, {
+        version,
+        cryptoVersion: CRYPTO_VERSION,
+        ...blob,
+      });
+      setVault((prev) => prev.map((item) => (item.id === id ? record : item)));
+      setHabits((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                ...input,
+                version: record.version,
+                updatedAt: record.updatedAt,
+              }
+            : item,
+        ),
+      );
+    },
+    [masterKey, habits],
+  );
+
+  const deleteHabit = useCallback(async (id: string) => {
+    await api.deleteVaultRecord(id);
+    setVault((prev) => prev.filter((item) => item.id !== id));
+    setHabits((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
+  const toggleHabit = useCallback(
+    async (id: string) => {
+      const habit = habits.find((item) => item.id === id);
+      if (!habit || habitBusy.has(id)) return;
+      const completions = toggleCompletion(habit.completions);
+      const optimistic: DecryptedHabit = { ...habit, completions };
+
+      setHabits((prev) => prev.map((item) => (item.id === id ? optimistic : item)));
+      markHabitBusy(id, true);
+      try {
+        const version = habit.version + 1;
+        const plain: HabitPlain = {
+          name: habit.name,
+          icon: habit.icon,
+          color: habit.color,
+          completions,
+        };
+        const blob = await encryptValue(masterKey, id, version, plain);
+        const record = await api.updateVaultRecord(id, {
+          version,
+          cryptoVersion: CRYPTO_VERSION,
+          ...blob,
+        });
+        setVault((prev) => prev.map((item) => (item.id === id ? record : item)));
+        setHabits((prev) =>
+          prev.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  version: record.version,
+                  updatedAt: record.updatedAt,
+                }
+              : item,
+          ),
+        );
+      } catch (err) {
+        setHabits((prev) =>
+          prev.map((item) => (item.id === id ? habit : item)),
+        );
+        setToast(
+          err instanceof Error ? err.message : "Could not save the check-in.",
+        );
+      } finally {
+        markHabitBusy(id, false);
+      }
+    },
+    [habits, habitBusy, markHabitBusy, masterKey],
+  );
+
+  // -------------------------------------------------------------------------
+  // Backup + export
+  // -------------------------------------------------------------------------
+
   async function restoreBackup(text: string) {
     setBusy(true);
     try {
-      const recordsToRestore = parseBackup(text);
+      const contents = parseBackup(text);
       let restored = 0;
       let failed = 0;
-      for (const record of recordsToRestore) {
+      for (const record of contents.entries) {
         try {
           await api.createEntryRecord(record);
           restored += 1;
@@ -329,15 +697,23 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
           failed += 1;
         }
       }
-      await load();
-      if (failed > 0) {
-        alert(
-          `Restored ${restored} of ${recordsToRestore.length} entries. ` +
-            `${failed} were skipped (already present).`,
-        );
+      for (const record of contents.vault) {
+        try {
+          await api.createVaultRecord(record);
+          restored += 1;
+        } catch {
+          failed += 1;
+        }
       }
+      await load();
+      const total = contents.entries.length + contents.vault.length;
+      setToast(
+        failed > 0
+          ? `Restored ${restored} of ${total} items. ${failed} were skipped (already present).`
+          : `Restored ${restored} ${restored === 1 ? "item" : "items"}.`,
+      );
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Restore failed");
+      setToast(err instanceof Error ? err.message : "Restore failed.");
     } finally {
       setBusy(false);
       if (fileInput.current) fileInput.current.value = "";
@@ -346,270 +722,224 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
 
   if (loading) {
     return (
-      <div className="flex h-dvh items-center justify-center text-lg opacity-70">
-        Unlocking your journal…
+      <div className="grid min-h-dvh place-items-center px-6">
+        <div className="text-center">
+          <span className="mx-auto grid h-20 w-20 place-items-center rounded-[1.6rem] bg-accent-lime text-[#09090b]">
+            <Flame className="h-11 w-11" glow animated />
+          </span>
+          <p className="mt-5 text-sm font-semibold">Unlocking your thread…</p>
+          <p className="mt-1 text-xs text-ash">
+            Decrypting everything in this browser.
+          </p>
+        </div>
       </div>
     );
   }
 
-  const hasFilters = query.trim().length > 0 || activeTag !== null;
+  const latestThought = thoughts[0] ?? null;
 
   return (
-    <div className="min-h-dvh bg-cream text-bark dark:bg-bark dark:text-cream">
-      <header className="sticky top-0 z-20 border-b border-black/10 bg-cream/85 backdrop-blur-md dark:border-white/15 dark:bg-bark/85">
-        <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3">
-          <span
-            aria-hidden
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-black/15 text-lg dark:border-white/20"
-          >
-            🍪
+    <div className="min-h-dvh bg-paper text-ink">
+      <header className="sticky top-0 z-30 border-b border-smoke/70 bg-paper/85 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-lg items-center gap-2 px-4 py-2.5">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ink text-paper">
+            <Cookie className="h-4 w-4" strokeWidth={2.2} aria-hidden />
           </span>
           <div className="min-w-0 leading-tight">
-            <h1 className="truncate font-serif text-lg font-semibold tracking-tight">
+            <p className="text-[0.55rem] font-bold uppercase tracking-[0.2em] text-ash">
               Gingerbread
-            </h1>
-            <p className="hidden text-xs opacity-50 sm:block">your private thread</p>
+            </p>
+            <p className="truncate text-sm font-semibold tracking-tight">
+              {VIEW_TITLES[view]}
+            </p>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+
+          <div className="ml-auto flex items-center gap-1.5">
             <button
               type="button"
-              className={`${primaryButtonClass} px-3 sm:px-4`}
-              onClick={createEntry}
-              disabled={busy}
+              onClick={() => navigate("streak")}
+              aria-label={`${streak} day streak — open the streak page`}
+              className="tap inline-flex h-10 items-center gap-1.5 rounded-full border border-smoke bg-paper pl-2 pr-3 text-sm font-bold"
             >
-              + New
+              <span className="grid h-6 w-6 place-items-center rounded-full bg-accent-lime text-[#09090b]">
+                <Flame className="h-4 w-4" animated />
+              </span>
+              <span className="tabular-nums">{streak}</span>
             </button>
             <ThemeToggle />
-            <div className="relative">
-              <button
-                type="button"
-                aria-label="Menu"
-                className={`${ghostButtonClass} px-2.5`}
-                onClick={() => setMenuOpen((open) => !open)}
-              >
-                ⋯
-              </button>
-              {menuOpen && (
-                <>
-                  <button
-                    type="button"
-                    aria-hidden
-                    tabIndex={-1}
-                    className="fixed inset-0 z-30 cursor-default"
-                    onClick={() => setMenuOpen(false)}
-                  />
-                  <div className="absolute right-0 z-40 mt-2 w-56 rounded-xl border border-black/10 bg-white p-1.5 shadow-xl dark:border-white/15 dark:bg-neutral-950">
-                    <MenuItem
-                      onClick={() => {
-                        setMenuOpen(false);
-                        void exportPdf(entries);
-                      }}
-                    >
-                      Export PDF
-                    </MenuItem>
-                    <MenuItem
-                      onClick={() => {
-                        setMenuOpen(false);
-                        exportMarkdown(entries);
-                      }}
-                    >
-                      Export Markdown
-                    </MenuItem>
-                    <MenuItem
-                      onClick={() => {
-                        setMenuOpen(false);
-                        exportEncryptedJson(records);
-                      }}
-                    >
-                      Encrypted backup
-                    </MenuItem>
-                    <MenuItem
-                      onClick={() => {
-                        setMenuOpen(false);
-                        fileInput.current?.click();
-                      }}
-                    >
-                      Restore from backup…
-                    </MenuItem>
-                    <div className="my-1 border-t border-black/10 dark:border-white/15" />
-                    <MenuItem
-                      onClick={() => {
-                        setMenuOpen(false);
-                        onLock();
-                      }}
-                    >
-                      Lock
-                    </MenuItem>
-                    <MenuItem
-                      onClick={() => {
-                        setMenuOpen(false);
-                        void api.logout().then(onLogout);
-                      }}
-                    >
-                      Sign out
-                    </MenuItem>
-                  </div>
-                </>
-              )}
-            </div>
+            <button
+              type="button"
+              aria-label="Open menu"
+              onClick={() => setMenuOpen(true)}
+              className={iconButtonClass}
+            >
+              <MoreHorizontal className="h-4 w-4" aria-hidden />
+            </button>
           </div>
-        </div>
-
-        <div className="mx-auto max-w-2xl space-y-2 px-4 pb-3">
-          <input
-            className={inputClass}
-            placeholder="Search the thread…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          {allTags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {activeTag && (
-                <button
-                  type="button"
-                  className="rounded-full bg-black px-2.5 py-1 text-xs text-white dark:bg-white dark:text-black"
-                  onClick={() => setActiveTag(null)}
-                >
-                  #{activeTag} ×
-                </button>
-              )}
-              {allTags
-                .filter(([tag]) => tag !== activeTag)
-                .map(([tag, count]) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    className="rounded-full border border-black/15 px-2.5 py-1 text-xs transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-                    onClick={() => setActiveTag(tag)}
-                  >
-                    #{tag} {count}
-                  </button>
-                ))}
-            </div>
-          )}
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 pb-16">
+      <main className="mx-auto w-full max-w-lg px-4 pb-32 pt-4">
         {loadError && (
-          <p className="py-4 text-sm text-red-600 dark:text-red-400">{loadError}</p>
+          <p className="mb-4 rounded-2xl bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-300">
+            {loadError}
+          </p>
         )}
 
-        {!hasFilters && entries.length > 0 && (
-          <>
-            <ActivityHeatmap entries={entries} />
-            <button
-              type="button"
-              onClick={createEntry}
-              disabled={busy}
-              className="flex w-full items-center gap-3 border-b border-black/10 py-4 text-left text-lg opacity-60 transition hover:bg-black/[0.02] dark:border-white/15 dark:hover:bg-white/[0.03]"
-            >
-              <span
-                aria-hidden
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-black/15 text-xs font-semibold dark:border-white/20"
-              >
-                You
-              </span>
-              <span>What&rsquo;s on your mind?</span>
-            </button>
-          </>
+        {view === "journal" && (
+          <JournalView
+            entries={entries}
+            visible={visible}
+            allTags={allTags}
+            query={query}
+            onQueryChange={setQuery}
+            activeTag={activeTag}
+            onTagChange={setActiveTag}
+            dayFilter={dayFilter}
+            onDayFilter={setDayFilter}
+            streak={streak}
+            busy={busy}
+            onCreate={createEntry}
+            onSelect={selectEntry}
+            onOpenStreak={() => navigate("streak")}
+            thoughtsCount={thoughts.length}
+            latestThought={latestThought}
+            onOpenThoughts={() => navigate("thoughts")}
+          />
         )}
 
-        {visible.length === 0 ? (
-          <div className="py-24 text-center opacity-60">
-            <p className="text-5xl" aria-hidden>
-              {entries.length === 0 ? "🍪" : "🔍"}
-            </p>
-            <p className="mt-4 text-sm">
-              {entries.length === 0
-                ? "Your thread is empty. Start writing."
-                : "No posts match your filters."}
-            </p>
-            {entries.length === 0 && (
-              <button
-                type="button"
-                className={`${primaryButtonClass} mt-5`}
-                onClick={createEntry}
-                disabled={busy}
-              >
-                + New entry
-              </button>
-            )}
-          </div>
-        ) : (
-          <ol>
-            {visible.map((entry, index) => (
-              <li key={entry.id} className="flex gap-3">
-                <div className="flex w-10 shrink-0 flex-col items-center">
-                  <Avatar entry={entry} />
-                  {index < visible.length - 1 && (
-                    <span
-                      aria-hidden
-                      className="w-px flex-1 bg-black/10 dark:bg-white/15"
-                    />
-                  )}
-                </div>
-                <article
-                  className={`min-w-0 flex-1 ${
-                    index < visible.length - 1 ? "pb-6" : "pb-4"
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => selectEntry(entry)}
-                    className="-mx-2 block w-full rounded-xl px-2 py-1.5 text-left transition hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
-                  >
-                    <div className="flex flex-wrap items-baseline gap-x-1.5 text-sm">
-                      <span className="font-semibold">Gingerbread</span>
-                      <span className="opacity-50">@you</span>
-                      <span className="opacity-40">
-                        · {formatPostDate(entry.date)}
-                      </span>
-                    </div>
-                    {entry.title.trim() && (
-                      <h2 className="mt-0.5 font-serif text-xl font-semibold leading-snug">
-                        {entry.title}
-                      </h2>
-                    )}
-                    {entry.markdown.trim() && (
-                      <p className="mt-0.5 line-clamp-6 whitespace-pre-wrap text-[0.95rem] leading-relaxed opacity-90">
-                        {entry.markdown.trim()}
-                      </p>
-                    )}
-                    {entry.tags.length > 0 && (
-                      <div className="mt-1.5 flex flex-wrap gap-x-2 text-sm opacity-60">
-                        {entry.tags.map((tag) => (
-                          <span key={tag}>#{tag}</span>
-                        ))}
-                      </div>
-                    )}
-                  </button>
-                </article>
-              </li>
-            ))}
-          </ol>
+        {view === "streak" && (
+          <StreakView
+            entries={entries}
+            onWrite={() => {
+              navigate("journal");
+              void createEntry();
+            }}
+          />
+        )}
+
+        {view === "habits" && (
+          <HabitsView
+            habits={habits}
+            busyIds={habitBusy}
+            onCreate={createHabit}
+            onUpdate={updateHabit}
+            onDelete={deleteHabit}
+            onToggle={(id) => void toggleHabit(id)}
+          />
+        )}
+
+        {view === "thoughts" && (
+          <ThoughtsView
+            thoughts={thoughts}
+            busy={busy}
+            onCreate={createThought}
+            onUpdate={updateThought}
+            onDelete={deleteThought}
+          />
         )}
       </main>
+
+      <BottomNav view={view} onNavigate={navigate} onCompose={createEntry} />
 
       <input
         ref={fileInput}
         type="file"
         accept="application/json,.json"
         className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
+        onChange={(event) => {
+          const file = event.target.files?.[0];
           if (!file) return;
           void file.text().then(restoreBackup);
         }}
       />
 
+      <Sheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        title="Menu"
+        description="Your data stays encrypted in this browser."
+      >
+        <div className="space-y-1">
+          <MenuRow
+            icon={<FileText className="h-4 w-4" aria-hidden />}
+            label="Export PDF"
+            hint="A readable keepsake"
+            onClick={() => {
+              setMenuOpen(false);
+              void exportPdf(entries);
+            }}
+          />
+          <MenuRow
+            icon={<Download className="h-4 w-4" aria-hidden />}
+            label="Export Markdown"
+            hint="Plain text, all entries"
+            onClick={() => {
+              setMenuOpen(false);
+              exportMarkdown(entries);
+            }}
+          />
+          <MenuRow
+            icon={<Lock className="h-4 w-4" aria-hidden />}
+            label="Encrypted backup"
+            hint="Ciphertext only — includes habits & thoughts"
+            onClick={() => {
+              setMenuOpen(false);
+              exportEncryptedJson(records, vault);
+            }}
+          />
+          <MenuRow
+            icon={<Upload className="h-4 w-4" aria-hidden />}
+            label="Restore backup"
+            hint="Merge an encrypted JSON backup"
+            onClick={() => {
+              setMenuOpen(false);
+              fileInput.current?.click();
+            }}
+          />
+        </div>
+
+        <div className="my-3 border-t border-smoke" />
+
+        <div className="space-y-1">
+          <MenuRow
+            icon={<Lock className="h-4 w-4" aria-hidden />}
+            label="Lock now"
+            hint="Drop the key from memory"
+            onClick={() => {
+              setMenuOpen(false);
+              onLock();
+            }}
+          />
+          <MenuRow
+            icon={<LogOut className="h-4 w-4" aria-hidden />}
+            label="Sign out"
+            hint="End this session"
+            danger
+            onClick={() => {
+              setMenuOpen(false);
+              void api.logout().then(onLogout);
+            }}
+          />
+        </div>
+      </Sheet>
+
+      {toast && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex justify-center px-4">
+          <p className="animate-rise max-w-md rounded-full bg-ink px-4 py-2.5 text-center text-xs font-medium text-paper shadow-xl">
+            {toast}
+          </p>
+        </div>
+      )}
+
       {selectedId && draft && (
         <div
-          className="fixed inset-0 z-50 flex justify-center bg-black/50 backdrop-blur-sm sm:p-6"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 backdrop-blur-sm sm:items-center sm:p-6"
           onClick={closeEditor}
+          role="presentation"
         >
           <div
-            className="w-full max-w-2xl overflow-y-auto bg-cream p-4 shadow-2xl sm:max-h-[90vh] sm:rounded-2xl sm:border sm:border-black/10 sm:p-6 dark:bg-neutral-950 sm:dark:border-white/15"
+            className="h-dvh w-full overflow-y-auto bg-paper p-4 sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-[2rem] sm:border sm:border-smoke sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <EntryEditor
@@ -634,38 +964,40 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
   );
 }
 
-function Avatar({ entry }: { entry: DecryptedEntry }) {
-  const initial =
-    (entry.title.trim() || entry.tags[0] || "").slice(0, 1).toUpperCase() || "·";
-  return (
-    <span
-      aria-hidden
-      className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-black/15 bg-dough text-sm font-semibold uppercase dark:border-white/20 dark:bg-white/10"
-    >
-      {initial}
-    </span>
-  );
-}
-
-function MenuItem({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+function MenuRow({
+  icon,
+  label,
+  hint,
+  danger,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  hint: string;
+  danger?: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="block w-full rounded-lg px-3 py-2 text-left text-sm transition hover:bg-black/5 dark:hover:bg-white/10"
+      className={cn(
+        "tap flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left hover:bg-mist",
+        danger && "text-red-600 dark:text-red-300",
+      )}
     >
-      {children}
+      <span
+        className={cn(
+          "grid h-9 w-9 shrink-0 place-items-center rounded-full bg-mist",
+          danger && "bg-red-500/10",
+        )}
+      >
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">{label}</span>
+        <span className="block text-[0.68rem] text-ash">{hint}</span>
+      </span>
     </button>
   );
-}
-
-function formatPostDate(value: string): string {
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return value;
-  const sameYear = date.getFullYear() === new Date().getFullYear();
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    ...(sameYear ? {} : { year: "numeric" }),
-  });
 }
