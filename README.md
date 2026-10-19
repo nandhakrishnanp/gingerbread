@@ -4,9 +4,10 @@ A private, **end-to-end encrypted** journaling web app. You write your daily
 thoughts in one chronological stream; everything is encrypted in your browser
 before it ever reaches the server. MongoDB only ever stores ciphertext.
 
-> **Status:** early scaffolding. Milestone 1 (project setup + database
-> connectivity) is done. See [`PLAN.md`](./PLAN.md) for the full design and
-> roadmap.
+> **Status:** feature-complete for the v1 scope. All eight build milestones in
+> [`PLAN.md`](./PLAN.md) are implemented: encrypted auth, entry CRUD, timeline,
+> Markdown editor with autosave, client-side search, tags, PDF/Markdown/encrypted
+> JSON export-restore, and PWA support with auto-lock.
 
 ## How it works
 
@@ -16,6 +17,18 @@ before it ever reaches the server. MongoDB only ever stores ciphertext.
 - **The server is a dumb relay.** It stores ciphertext and opaque metadata, and
   can never read, search, or decrypt your entries.
 - **One user, one stream.** A personal journal, not a multi-tenant product.
+
+## Features
+
+- **Setup & unlock** with split key derivation and a one-time recovery key.
+- **Timeline** of dated entries, grouped by day, with tag filters.
+- **Markdown editor** (light toolbar + preview) with debounced autosave,
+  per-entry version history, and manual save (⌘/Ctrl+S).
+- **Instant client-side search** across decrypted entries.
+- **Export** to PDF, Markdown, and an encrypted JSON backup; restore from a
+  backup file.
+- **Auto-lock** after 15 minutes idle; the master key lives only in memory.
+- **Installable PWA** with an offline app shell, plus light/dark/system themes.
 
 ## Tech stack
 
@@ -57,6 +70,13 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 | `pnpm start`     | Run the production build.          |
 | `pnpm lint`      | Lint with ESLint.                  |
 | `pnpm typecheck` | Type-check with `tsc --noEmit`.    |
+| `pnpm test`      | Run the unit tests (Vitest).       |
+
+Regenerate the PWA icons after changing the palette with:
+
+```bash
+node scripts/generate-icons.mjs
+```
 
 ## Security notes
 

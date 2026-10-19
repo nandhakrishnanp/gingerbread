@@ -7,10 +7,17 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
+    "dompurify": "^3.4.17",
+    "hash-wasm": "^4.12.0",
     "jose": "^6.2.12",
+    "jspdf": "^4.2.1",
+    "marked": "^18.1.1",
+    "minisearch": "^7.2.0",
     "mongodb": "^7.7.0",
     "next": "16.4.2",
     "react": "19.3.0",
@@ -25,7 +32,11 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^5.0.5"
   },
-  "packageManager": "pnpm@12.14.0"
+  "packageManager": "pnpm@12.14.0",
+  "pnpm": {
+    "ignoredBuiltDependencies": ["core-js"]
+  }
 }

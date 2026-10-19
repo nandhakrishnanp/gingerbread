@@ -10,9 +10,18 @@
   --color-bark: #2b1b11;
 }
 
+/* Dark mode is driven by a `.dark` class on <html> (set by the theme script and
+   ThemeToggle, from an explicit choice or the system preference), so `dark:`
+   utilities and the base colours always agree. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
   :root {
-    color-scheme: light dark;
+    color-scheme: light;
+  }
+
+  :root.dark {
+    color-scheme: dark;
   }
 
   body {
@@ -20,10 +29,75 @@
     color: var(--color-bark);
   }
 
-  @media (prefers-color-scheme: dark) {
-    body {
-      background-color: var(--color-bark);
-      color: var(--color-cream);
-    }
+  :root.dark body {
+    background-color: var(--color-bark);
+    color: var(--color-cream);
+  }
+}
+
+@layer components {
+  .prose-gingerbread {
+    line-height: 1.7;
+  }
+
+  .prose-gingerbread > * + * {
+    margin-top: 0.75rem;
+  }
+
+  .prose-gingerbread h1,
+  .prose-gingerbread h2,
+  .prose-gingerbread h3 {
+    font-family: var(--font-serif, ui-serif, Georgia, serif);
+    font-weight: 600;
+    line-height: 1.25;
+  }
+  .prose-gingerbread h1 {
+    font-size: 1.6rem;
+  }
+  .prose-gingerbread h2 {
+    font-size: 1.3rem;
+  }
+  .prose-gingerbread h3 {
+    font-size: 1.1rem;
+  }
+
+  .prose-gingerbread ul {
+    list-style: disc;
+    padding-left: 1.5rem;
+  }
+  .prose-gingerbread ol {
+    list-style: decimal;
+    padding-left: 1.5rem;
+  }
+
+  .prose-gingerbread blockquote {
+    border-left: 3px solid var(--color-ginger);
+    padding-left: 1rem;
+    font-style: italic;
+    opacity: 0.85;
+  }
+
+  .prose-gingerbread code {
+    background: color-mix(in srgb, var(--color-ginger) 18%, transparent);
+    border-radius: 0.35rem;
+    padding: 0.1rem 0.35rem;
+    font-size: 0.9em;
+  }
+
+  .prose-gingerbread pre {
+    background: color-mix(in srgb, var(--color-cocoa) 15%, transparent);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    overflow-x: auto;
+  }
+
+  .prose-gingerbread pre code {
+    background: transparent;
+    padding: 0;
+  }
+
+  .prose-gingerbread a {
+    color: var(--color-ember);
+    text-decoration: underline;
   }
 }

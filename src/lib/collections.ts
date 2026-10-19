@@ -1,4 +1,5 @@
 import type { Collection } from "mongodb";
+import type { Kdf } from "./constants";
 import { getDb } from "./mongodb";
 
 /**
@@ -10,8 +11,10 @@ export interface UserDoc {
   saltAuth: string; // base64 salt for deriving the auth key
   saltEnc: string; // base64 salt for deriving the encryption (master) key
   authVerifier: string; // server-side hash of the client's derived auth key
+  kdf: Kdf; // password KDF used at setup, re-used at unlock
   cryptoVersion: number; // algorithm version stamped for future migrations
   recoveryWrappedMasterKey?: string; // master key wrapped by the recovery key
+  recoveryAuthVerifier?: string; // server hash of the recovery proof (never the key)
   createdAt: Date;
 }
 

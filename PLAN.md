@@ -80,7 +80,8 @@ MongoDB Atlas
 
 - **Setup**: generate random `salt_auth` and `salt_enc`. Client derives
   `authKey = Argon2id(password, salt_auth)` and `masterKey = Argon2id(password, salt_enc)`.
-  Sends only `hash(authKey)` (server re-hashes with bcrypt/argon2 before storing).
+  Sends only `hash(authKey)` (server re-hashes with scrypt before storing) plus
+  the chosen KDF (`argon2id`/`pbkdf2`) so unlock stays consistent across devices.
   Optionally generate a **recovery key** that wraps `masterKey`.
 - **Entry encryption**: random data key → `AES-256-GCM` encrypts entry JSON
   `{title?, markdown, tags[]}` with a unique 96-bit IV and `AAD = entryId||version`.
@@ -110,9 +111,11 @@ sizes, version. Documented in a privacy note.
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET  | `/api/auth/status` | Is a user set up? session valid? |
+| GET  | `/api/auth/params` | Public salts + KDF needed before auth |
 | POST | `/api/auth/setup` | One-time account creation (only if DB empty) |
 | POST | `/api/auth/login` | Verify authKey, set session cookie |
 | POST | `/api/auth/logout` | Clear session |
+| POST | `/api/auth/recover` | Session from a recovery-key proof |
 | GET  | `/api/entries` | List ciphertext metadata + blobs |
 | POST | `/api/entries` | Create encrypted entry |
 | PATCH| `/api/entries/:id` | Update (version-checked, LWW) |
@@ -165,13 +168,43 @@ reminders, "On This Day," AI features, sharing, multi-journal, passkey unlock.
 5. Auto-lock idle timeout: **15 minutes**.
 6. Package manager: **pnpm**.
 
-## 13. Suggested build milestones
+## 13. Build milestones
 
-1. Scaffold Next.js + Tailwind + TS + Mongo connection; `/api/auth/status`.
-2. Crypto module (Argon2id, AES-GCM, envelope) + unit tests.
-3. `/setup` and `/login` with split derivation + cookie session.
-4. Entry CRUD API + encrypted blob storage.
-5. Timeline UI + Markdown editor + autosave.
-6. Client-side search + tags.
-7. PDF / Markdown / encrypted JSON export.
-8. PWA + auto-lock + light/dark theme polish.
+1. ✅ Scaffold Next.js + Tailwind + TS + Mongo connection; `/api/auth/status`.
+2. ✅ Crypto module (Argon2id, AES-GCM, envelope) + unit tests.
+3. ✅ `/setup` and `/login` with split derivation + cookie session.
+4. ✅ Entry CRUD API + encrypted blob storage.
+5. ✅ Timeline UI + Markdown editor + autosave.
+6. ✅ Client-side search + tags.
+7. ✅ PDF / Markdown / encrypted JSON export.
+8. ✅ PWA + auto-lock + light/dark theme polish.
+
+## 14. Implementation notes (as built)
+
+- **Crypto lives in `src/lib/crypto.ts`** (browser + Node), using `hash-wasm`
+  Argon2id with a WebCrypto PBKDF2 fallback, `AES-256-GCM` envelope encryption,
+  and Crockford-base32 recovery keys.
+- **Recovery preserves zero-knowledge**: the server stores only
+  `scrypt(sha256(recoveryKey))` as a proof plus the recovery-wrapped master key.
+  It can grant a session but can never derive the master key.
+- **Auth verifier**: the server stores `scrypt(authKey)`; it never sees the
+  password or master key.
+- **API surface** adds `/api/auth/params` and `/api/auth/recover` to the table
+  in §7.
+- **Testing**: pure client logic (crypto, search, export builders) has Vitest
+  unit tests under `src/lib/*.test.ts`; `src/lib/e2e.test.ts` is an opt-in
+  integration test that runs when `E2E_BASE` points at a live server.
+
+## 15. Known gaps / follow-ups
+
+- **Strict CSP (§10) is not yet wired up.** Adding it needs a nonce for the
+  pre-paint theme script; planned for a hardening pass.
+- **PDF export** uses jsPDF's built-in Helvetica, so non-Latin and emoji
+  characters may not render. Embedding a Unicode font is future work.
+- **Conflict policy**: updates are version-checked and return `409` (the client
+  reloads) rather than blindly overwriting. This is stricter than the §18
+  last-write-wins wording and is intentional for a single-writer app.
+- **Calendar / jump-to-date rail** (§9) is not built; the timeline is a
+  date-grouped list with a per-entry date picker.
+- **Auto-lock** fires on 15 minutes idle and on tab close (`pagehide`); the
+  session cookie still outlives it, but the master key never does.

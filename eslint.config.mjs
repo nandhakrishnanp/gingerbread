@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Plain-JS service worker served verbatim from the public folder.
+    "public/**",
   ]),
 ]);
 
