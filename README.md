@@ -1,8 +1,29 @@
-# 🍪 Gingerbread
+<p align="center">
+  <img src="public/icon-192.png" width="112" height="112" alt="Gingerbread app icon" />
+</p>
 
-A private, **end-to-end encrypted** journaling web app. You write your daily
-thoughts in one chronological stream; everything is encrypted in your browser
-before it ever reaches the server. MongoDB only ever stores ciphertext.
+<h1 align="center">Gingerbread</h1>
+
+<p align="center">
+  A private, <strong>end-to-end encrypted</strong> journaling web app.<br />
+  Write your daily thoughts in one chronological stream — everything is
+  encrypted in your browser before it ever reaches the server.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs&logoColor=white" alt="Next.js 16" />
+  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19" />
+  <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white" alt="TypeScript strict" />
+  <img src="https://img.shields.io/badge/encryption-AES--256--GCM-6E4C1E" alt="AES-256-GCM encryption" />
+  <img src="https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa&logoColor=white" alt="Installable PWA" />
+</p>
+
+## Screenshots
+
+| Journal | Habits | Streak |
+| :-----: | :----: | :----: |
+| ![Journal page](src/media/journelpage.jpeg) | ![Habits page](src/media/habitspage.jpeg) | ![Streak page](src/media/streakspage.jpeg) |
+| Your daily thread, recent days, and latest thought. | Check off small things every day and keep each flame alive. | Streak stats and the green grid of days you showed up. |
 
 > **Status:** feature-complete for the v1 scope. All eight build milestones in
 > [`PLAN.md`](./PLAN.md) are implemented: encrypted auth, entry CRUD, timeline,
@@ -29,13 +50,6 @@ before it ever reaches the server. MongoDB only ever stores ciphertext.
   backup file.
 - **Auto-lock** after 15 minutes idle; the master key lives only in memory.
 - **Installable PWA** with an offline app shell, plus light/dark/system themes.
-
-## Screenshots
-
-| Journal | Habits | Streak |
-| :-----: | :----: | :----: |
-| ![Journal page](src/media/journelpage.jpeg) | ![Habits page](src/media/habitspage.jpeg) | ![Streak page](src/media/streakspage.jpeg) |
-| Your daily thread, recent days, and latest thought. | Check off small things every day and keep each flame alive. | Streak stats and the green grid of days you showed up. |
 
 ## Tech stack
 
