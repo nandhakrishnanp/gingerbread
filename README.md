@@ -30,6 +30,13 @@ before it ever reaches the server. MongoDB only ever stores ciphertext.
 - **Auto-lock** after 15 minutes idle; the master key lives only in memory.
 - **Installable PWA** with an offline app shell, plus light/dark/system themes.
 
+## Screenshots
+
+| Journal | Habits | Streak |
+| :-----: | :----: | :----: |
+| ![Journal page](src/media/journelpage.jpeg) | ![Habits page](src/media/habitspage.jpeg) | ![Streak page](src/media/streakspage.jpeg) |
+| Your daily thread, recent days, and latest thought. | Check off small things every day and keep each flame alive. | Streak stats and the green grid of days you showed up. |
+
 ## Tech stack
 
 - [Next.js](https://nextjs.org) 16 (App Router) + React 19
