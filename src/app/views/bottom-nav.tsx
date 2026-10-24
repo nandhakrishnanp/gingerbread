@@ -1,10 +1,9 @@
 "use client";
 
-import { BookOpen, CircleCheckBig, Plus, Sparkles } from "lucide-react";
-import { Flame } from "../flame";
+import { BookOpen, CircleCheckBig, Plus, Sparkles, Wallet } from "lucide-react";
 import { cn } from "../cn";
 
-export type View = "journal" | "habits" | "streak" | "thoughts";
+export type View = "journal" | "habits" | "streak" | "thoughts" | "expenses";
 
 interface Props {
   view: View;
@@ -47,11 +46,11 @@ export function BottomNav({ view, onNavigate, onCompose }: Props) {
             </div>
 
             <Tab
-              label="Streak"
-              active={view === "streak"}
-              onClick={() => onNavigate("streak")}
+              label="Money"
+              active={view === "expenses"}
+              onClick={() => onNavigate("expenses")}
             >
-              <Flame className="h-5 w-5" animated={view === "streak"} />
+              <Wallet className="h-5 w-5" strokeWidth={2} aria-hidden />
             </Tab>
 
             <Tab

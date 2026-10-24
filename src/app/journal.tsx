@@ -16,6 +16,7 @@ import {
   LogOut,
   MoreHorizontal,
   Upload,
+  Wallet,
 } from "lucide-react";
 import * as api from "@/lib/api-client";
 import {
@@ -43,14 +44,19 @@ import {
   type HabitColorKey,
   type HabitIconKey,
 } from "@/lib/habits";
+import { exportMoneyBackup, parseMoneyBackup } from "@/lib/expenses";
 import type {
+  BudgetRecord,
   DecryptedEntry,
   DecryptedHabit,
   DecryptedThought,
   Draft,
   EntryPlain,
   EntryRecord,
+  ExpenseInput,
+  ExpenseRecord,
   HabitPlain,
+  PaymentMethod,
   ThoughtPlain,
   VaultRecord,
 } from "@/lib/types";
@@ -61,6 +67,8 @@ import { JournalView } from "./views/journal-view";
 import { StreakView } from "./views/streak-view";
 import { HabitsView } from "./views/habits-view";
 import { ThoughtsView } from "./views/thoughts-view";
+import { ExpensesView } from "./views/expenses-view";
+import { QuickExpenseSheet } from "./views/expense-form";
 import { Sheet } from "./sheet";
 import { Flame } from "./flame";
 import { iconButtonClass } from "./ui";
@@ -77,6 +85,7 @@ const VIEW_TITLES: Record<View, string> = {
   habits: "Habits",
   streak: "Streak",
   thoughts: "Thoughts",
+  expenses: "Money",
 };
 
 function isDirty(draft: Draft, saved: DecryptedEntry): boolean {
@@ -129,7 +138,10 @@ function toHabit(record: VaultRecord, plain: HabitPlain): DecryptedHabit {
 function viewFromHash(): View {
   if (typeof window === "undefined") return "journal";
   const value = window.location.hash.replace(/^#\/?/, "");
-  return value === "habits" || value === "streak" || value === "thoughts"
+  return value === "habits" ||
+    value === "streak" ||
+    value === "thoughts" ||
+    value === "expenses"
     ? value
     : "journal";
 }
@@ -140,6 +152,8 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
   const [vault, setVault] = useState<VaultRecord[]>([]);
   const [thoughts, setThoughts] = useState<DecryptedThought[]>([]);
   const [habits, setHabits] = useState<DecryptedHabit[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
+  const [budgets, setBudgets] = useState<BudgetRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [toast, setToast] = useState("");
@@ -159,16 +173,25 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
   const [busy, setBusy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [habitBusy, setHabitBusy] = useState<Set<string>>(new Set());
+  const [quickExpenseOpen, setQuickExpenseOpen] = useState(false);
+  const [expensePromptSkipped, setExpensePromptSkipped] = useState<string | null>(
+    null,
+  );
+  const [quickPayment, setQuickPayment] = useState<PaymentMethod>("upi");
 
   const entriesRef = useRef(entries);
   const draftRef = useRef(draft);
   const selectedIdRef = useRef(selectedId);
+  const expensesRef = useRef(expenses);
   const savingRef = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const moneyInput = useRef<HTMLInputElement>(null);
+  const newEntryIdRef = useRef<string | null>(null);
 
   useEffect(() => void (entriesRef.current = entries), [entries]);
   useEffect(() => void (draftRef.current = draft), [draft]);
   useEffect(() => void (selectedIdRef.current = selectedId), [selectedId]);
+  useEffect(() => void (expensesRef.current = expenses), [expenses]);
 
   useEffect(() => {
     const sync = () => setView(viewFromHash());
@@ -193,11 +216,19 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
   }, []);
 
   const load = useCallback(async () => {
-    const [recs, vaultRecords] = await Promise.all([
+    const [recs, vaultRecords, expenseRecords, budgetRecords] = await Promise.all([
       api.fetchEntries(),
       api.fetchVaultRecords().catch((err) => {
         console.warn("[journal] vault unavailable", err);
         return [] as VaultRecord[];
+      }),
+      api.fetchExpenses().catch((err) => {
+        console.warn("[journal] money unavailable", err);
+        return [] as ExpenseRecord[];
+      }),
+      api.fetchBudgets().catch((err) => {
+        console.warn("[journal] budgets unavailable", err);
+        return [] as BudgetRecord[];
       }),
     ]);
 
@@ -259,6 +290,8 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
     setVault(vaultRecords);
     setThoughts(nextThoughts);
     setHabits(nextHabits);
+    setExpenses(expenseRecords);
+    setBudgets(budgetRecords);
   }, [masterKey]);
 
   useEffect(() => {
@@ -400,8 +433,27 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
 
   /** Close the compose overlay, flushing any pending edit first. */
   const closeEditor = useCallback(() => {
-    void save().finally(() => setSelectedId(null));
-  }, [save]);
+    const closingId = selectedIdRef.current;
+    const closingDraft = draftRef.current;
+    const wasNew = closingId !== null && closingId === newEntryIdRef.current;
+    void save().finally(() => {
+      setSelectedId(null);
+      if (!wasNew) return;
+      newEntryIdRef.current = null;
+
+      const today = dateKey(new Date());
+      const alreadyLogged = expensesRef.current.some(
+        (expense) => expense.date === today && expense.kind === "expense",
+      );
+      if (
+        closingDraft?.date === today &&
+        !alreadyLogged &&
+        expensePromptSkipped !== today
+      ) {
+        setQuickExpenseOpen(true);
+      }
+    });
+  }, [save, expensePromptSkipped]);
 
   // Escape closes the compose overlay.
   useEffect(() => {
@@ -442,6 +494,7 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
       setEntries((prev) => [decrypted, ...prev]);
       setView("journal");
       window.history.replaceState(null, "", "#/journal");
+      newEntryIdRef.current = decrypted.id;
       selectEntry(decrypted);
     } catch (err) {
       setToast(err instanceof Error ? err.message : "Could not start a new entry.");
@@ -680,6 +733,54 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
   );
 
   // -------------------------------------------------------------------------
+  // Plaintext money records
+  // -------------------------------------------------------------------------
+
+  const createExpense = useCallback(async (input: ExpenseInput) => {
+    const record = await api.createExpenseRecord({
+      id: crypto.randomUUID(),
+      ...input,
+    });
+    setQuickPayment(input.payment);
+    setExpenses((prev) => [record, ...prev]);
+  }, []);
+
+  const updateExpense = useCallback(
+    async (id: string, input: ExpenseInput) => {
+      const record = await api.updateExpenseRecord(id, input);
+      setQuickPayment(input.payment);
+      setExpenses((prev) =>
+        prev.map((expense) => (expense.id === id ? record : expense)),
+      );
+    },
+    [],
+  );
+
+  const deleteExpense = useCallback(async (id: string) => {
+    await api.deleteExpenseRecord(id);
+    setExpenses((prev) => prev.filter((expense) => expense.id !== id));
+  }, []);
+
+  const saveBudget = useCallback(
+    async (input: {
+      month: string;
+      total: number;
+      categories: Record<string, number>;
+    }) => {
+      const record = await api.saveBudgetRecord(input);
+      setBudgets((prev) => {
+        const exists = prev.some((budget) => budget.month === record.month);
+        return exists
+          ? prev.map((budget) =>
+              budget.month === record.month ? record : budget,
+            )
+          : [record, ...prev];
+      });
+    },
+    [],
+  );
+
+  // -------------------------------------------------------------------------
   // Backup + export
   // -------------------------------------------------------------------------
 
@@ -717,6 +818,59 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
     } finally {
       setBusy(false);
       if (fileInput.current) fileInput.current.value = "";
+    }
+  }
+
+  async function restoreMoney(text: string) {
+    setBusy(true);
+    try {
+      const { expenses: expenseRecords, budgets: budgetRecords } =
+        parseMoneyBackup(text);
+      let restored = 0;
+      let failed = 0;
+
+      for (const record of expenseRecords) {
+        try {
+          await api.createExpenseRecord({
+            id: record.id,
+            date: record.date,
+            kind: record.kind,
+            amount: record.amount,
+            category: record.category,
+            payment: record.payment,
+            note: record.note,
+          });
+          restored += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+
+      for (const budget of budgetRecords) {
+        try {
+          await api.saveBudgetRecord({
+            month: budget.month,
+            total: budget.total,
+            categories: budget.categories,
+          });
+          restored += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+
+      await load();
+      const total = expenseRecords.length + budgetRecords.length;
+      setToast(
+        failed > 0
+          ? `Imported ${restored} of ${total} money items. ${failed} were skipped (already present).`
+          : `Imported ${restored} ${restored === 1 ? "money item" : "money items"}.`,
+      );
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "Money import failed.");
+    } finally {
+      setBusy(false);
+      if (moneyInput.current) moneyInput.current.value = "";
     }
   }
 
@@ -838,6 +992,17 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
             onDelete={deleteThought}
           />
         )}
+
+        {view === "expenses" && (
+          <ExpensesView
+            expenses={expenses}
+            budgets={budgets}
+            onCreate={createExpense}
+            onUpdate={updateExpense}
+            onDelete={deleteExpense}
+            onSaveBudget={saveBudget}
+          />
+        )}
       </main>
 
       <BottomNav view={view} onNavigate={navigate} onCompose={createEntry} />
@@ -854,11 +1019,23 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
         }}
       />
 
+      <input
+        ref={moneyInput}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (!file) return;
+          void file.text().then(restoreMoney);
+        }}
+      />
+
       <Sheet
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         title="Menu"
-        description="Your data stays encrypted in this browser."
+        description="Journal and vault stay encrypted. Money is stored unencrypted."
       >
         <div className="space-y-1">
           <MenuRow
@@ -895,6 +1072,24 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
             onClick={() => {
               setMenuOpen(false);
               fileInput.current?.click();
+            }}
+          />
+          <MenuRow
+            icon={<Wallet className="h-4 w-4" aria-hidden />}
+            label="Export money"
+            hint="Plaintext JSON — expenses & budgets"
+            onClick={() => {
+              setMenuOpen(false);
+              exportMoneyBackup(expenses, budgets);
+            }}
+          />
+          <MenuRow
+            icon={<Upload className="h-4 w-4" aria-hidden />}
+            label="Import money"
+            hint="Merge a plaintext money backup"
+            onClick={() => {
+              setMenuOpen(false);
+              moneyInput.current?.click();
             }}
           />
         </div>
@@ -959,6 +1154,22 @@ export function Journal({ masterKey, onLock, onLogout }: Props) {
             />
           </div>
         </div>
+      )}
+
+      {quickExpenseOpen && (
+        <QuickExpenseSheet
+          date={dateKey(new Date())}
+          payment={quickPayment}
+          busy={false}
+          onSkip={() => {
+            setExpensePromptSkipped(dateKey(new Date()));
+            setQuickExpenseOpen(false);
+          }}
+          onSave={async (input) => {
+            await createExpense(input);
+            setQuickExpenseOpen(false);
+          }}
+        />
       )}
     </div>
   );

@@ -47,6 +47,52 @@ export interface Draft extends EntryPlain {
 }
 
 // ---------------------------------------------------------------------------
+// Money records. Unlike the journal and vault, expenses and budgets are stored
+// as plaintext on purpose: the user asked for these to be readable server-side.
+// Nothing here is encrypted.
+// ---------------------------------------------------------------------------
+
+export const EXPENSE_KINDS = ["expense", "income"] as const;
+export type ExpenseKind = (typeof EXPENSE_KINDS)[number];
+
+export const PAYMENT_METHODS = ["cash", "upi", "card", "bank", "other"] as const;
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+
+/** A plaintext expense or income entry as returned by the API. */
+export interface ExpenseRecord {
+  id: string;
+  /** Local calendar day, `YYYY-MM-DD`. */
+  date: string;
+  kind: ExpenseKind;
+  /** Integer paise, never a float. */
+  amount: number;
+  category: string;
+  payment: PaymentMethod;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The editable fields of an expense. */
+export interface ExpenseInput {
+  date: string;
+  kind: ExpenseKind;
+  amount: number;
+  category: string;
+  payment: PaymentMethod;
+  note: string;
+}
+
+/** A plaintext monthly budget. `total` is paise, 0 means unset. */
+export interface BudgetRecord {
+  /** `YYYY-MM` */
+  month: string;
+  total: number;
+  categories: Record<string, number>;
+  updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
 // Encrypted vault items: thoughts and habits share the entry envelope but are
 // stored separately from the journal stream.
 // ---------------------------------------------------------------------------
