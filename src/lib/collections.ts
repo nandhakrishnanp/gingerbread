@@ -1,5 +1,6 @@
 import type { Collection } from "mongodb";
 import type { Kdf } from "./constants";
+import type { ExpenseKind, PaymentMethod } from "./types";
 import { getDb } from "./mongodb";
 
 /**
@@ -62,6 +63,34 @@ export interface EntryRevisionDoc {
   ciphertext: string;
 }
 
+/**
+ * A plaintext expense or income row. Deliberately not encrypted: amounts,
+ * categories and notes are readable by the server.
+ */
+export interface ExpenseDoc {
+  _id: string;
+  userId: string;
+  date: string; // local YYYY-MM-DD
+  kind: ExpenseKind;
+  amount: number; // integer paise
+  category: string;
+  payment: PaymentMethod;
+  note: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** A plaintext monthly budget, one document per user per month. */
+export interface BudgetDoc {
+  _id: string;
+  userId: string;
+  month: string; // YYYY-MM
+  total: number; // integer paise, 0 = unset
+  categories: Record<string, number>;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export async function users(): Promise<Collection<UserDoc>> {
   return (await getDb()).collection<UserDoc>("users");
 }
@@ -78,14 +107,28 @@ export async function vaultRecords(): Promise<Collection<VaultDoc>> {
   return (await getDb()).collection<VaultDoc>("vault_records");
 }
 
+export async function expenses(): Promise<Collection<ExpenseDoc>> {
+  return (await getDb()).collection<ExpenseDoc>("expenses");
+}
+
+export async function budgets(): Promise<Collection<BudgetDoc>> {
+  return (await getDb()).collection<BudgetDoc>("budgets");
+}
+
 /** Create the indexes the app relies on. Safe to call repeatedly. */
 export async function ensureIndexes(): Promise<void> {
-  const [entriesCol, revisionsCol, vaultCol] = await Promise.all([
-    entries(),
-    entryRevisions(),
-    vaultRecords(),
-  ]);
+  const [entriesCol, revisionsCol, vaultCol, expensesCol, budgetsCol] =
+    await Promise.all([
+      entries(),
+      entryRevisions(),
+      vaultRecords(),
+      expenses(),
+      budgets(),
+    ]);
   await entriesCol.createIndex({ userId: 1, date: -1 });
   await revisionsCol.createIndex({ entryId: 1, version: -1 });
   await vaultCol.createIndex({ userId: 1, kind: 1, createdAt: -1 });
+  await expensesCol.createIndex({ userId: 1, date: -1 });
+  await expensesCol.createIndex({ userId: 1, date: -1, createdAt: -1, _id: -1 });
+  await budgetsCol.createIndex({ userId: 1, month: 1 }, { unique: true });
 }

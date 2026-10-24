@@ -1,5 +1,13 @@
 import type { Kdf } from "./constants";
-import type { EntryRecord, VaultKind, VaultRecord } from "./types";
+import type {
+  BudgetRecord,
+  EntryRecord,
+  ExpenseInput,
+  ExpenseKind,
+  ExpenseRecord,
+  VaultKind,
+  VaultRecord,
+} from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -195,4 +203,83 @@ export async function updateVaultRecord(
 
 export async function deleteVaultRecord(id: string): Promise<void> {
   await request(`/api/vault/${id}`, { method: "DELETE" });
+}
+
+// ---------------------------------------------------------------------------
+// Plaintext money records
+// ---------------------------------------------------------------------------
+
+export async function fetchExpenses(): Promise<ExpenseRecord[]> {
+  const { expenses } = await request<{ expenses: ExpenseRecord[] }>(
+    "/api/expenses",
+  );
+  return expenses;
+}
+
+export interface ExpensePage {
+  expenses: ExpenseRecord[];
+  nextCursor: string | null;
+  total: number;
+}
+
+export async function fetchExpensePage(query: {
+  from?: string;
+  to?: string;
+  kind?: ExpenseKind;
+  limit?: number;
+  cursor?: string;
+}): Promise<ExpensePage> {
+  const params = new URLSearchParams();
+  if (query.from) params.set("from", query.from);
+  if (query.to) params.set("to", query.to);
+  if (query.kind) params.set("kind", query.kind);
+  if (query.limit) params.set("limit", String(query.limit));
+  if (query.cursor) params.set("cursor", query.cursor);
+  return request<ExpensePage>(`/api/expenses?${params.toString()}`);
+}
+
+export interface NewExpensePayload extends ExpenseInput {
+  id: string;
+}
+
+export async function createExpenseRecord(
+  payload: NewExpensePayload,
+): Promise<ExpenseRecord> {
+  const { expense } = await request<{ expense: ExpenseRecord }>(
+    "/api/expenses",
+    { method: "POST", body: JSON.stringify(payload) },
+  );
+  return expense;
+}
+
+export async function updateExpenseRecord(
+  id: string,
+  payload: ExpenseInput,
+): Promise<ExpenseRecord> {
+  const { expense } = await request<{ expense: ExpenseRecord }>(
+    `/api/expenses/${id}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+  );
+  return expense;
+}
+
+export async function deleteExpenseRecord(id: string): Promise<void> {
+  await request(`/api/expenses/${id}`, { method: "DELETE" });
+}
+
+export async function fetchBudgets(): Promise<BudgetRecord[]> {
+  const { budgets } = await request<{ budgets: BudgetRecord[] }>("/api/budgets");
+  return budgets;
+}
+
+export async function saveBudgetRecord(payload: {
+  month: string;
+  total: number;
+  categories: Record<string, number>;
+}): Promise<BudgetRecord> {
+  const { budget } = await request<{ budget: BudgetRecord }>("/api/budgets", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+  return budget;
 }
