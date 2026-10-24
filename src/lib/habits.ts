@@ -146,6 +146,57 @@ export function lastDays(
   return cells;
 }
 
+export interface MonthCell {
+  key: string;
+  date: Date;
+  dayOfMonth: number;
+  done: boolean;
+  isToday: boolean;
+  isFuture: boolean;
+}
+
+/**
+ * A month laid out as Monday-first weeks, with `null` padding at the start and
+ * end so every row holds exactly seven cells. Read-only: the calendar only
+ * reflects stored completions.
+ */
+export function monthGrid(
+  completions: string[],
+  year: number,
+  month: number,
+  today: Date = new Date(),
+): Array<Array<MonthCell | null>> {
+  const done = new Set(completions);
+  const todayStart = startOfDay(today);
+  const todayKey = dateKey(todayStart);
+
+  const first = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  // getDay() is Sunday-first; shift it so Monday becomes column zero.
+  const offset = (first.getDay() + 6) % 7;
+
+  const cells: Array<MonthCell | null> = Array(offset).fill(null);
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = new Date(year, month, day);
+    const key = dateKey(date);
+    cells.push({
+      key,
+      date,
+      dayOfMonth: day,
+      done: done.has(key),
+      isToday: key === todayKey,
+      isFuture: date.getTime() > todayStart.getTime(),
+    });
+  }
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const weeks: Array<Array<MonthCell | null>> = [];
+  for (let index = 0; index < cells.length; index += 7) {
+    weeks.push(cells.slice(index, index + 7));
+  }
+  return weeks;
+}
+
 /** How many of the last `count` days (including today) are complete. */
 export function completionRate(
   completions: string[],

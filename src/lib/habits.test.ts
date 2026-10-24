@@ -5,9 +5,11 @@ import {
   habitStreak,
   isCompletedToday,
   lastDays,
+  monthGrid,
   nextMilestone,
   normalizeCompletions,
   toggleCompletion,
+  type MonthCell,
 } from "./habits";
 
 const today = new Date(2026, 2, 12); // 12 Mar 2026
@@ -81,6 +83,59 @@ describe("lastDays", () => {
         today,
       ),
     ).toBe(3);
+  });
+});
+
+describe("monthGrid", () => {
+  const cellsOf = (weeks: Array<Array<MonthCell | null>>) =>
+    weeks.flat().filter((cell): cell is MonthCell => cell !== null);
+
+  it("lays the month out Monday-first with leading padding", () => {
+    // 1 March 2026 is a Sunday, so it sits in the last column.
+    const weeks = monthGrid([], 2026, 2, today);
+    expect(weeks).toHaveLength(6);
+    expect(weeks[0].slice(0, 6)).toEqual([null, null, null, null, null, null]);
+    expect(weeks[0][6]?.key).toBe("2026-03-01");
+    expect(weeks.every((week) => week.length === 7)).toBe(true);
+  });
+
+  it("starts in column zero when the month begins on a Monday", () => {
+    // 1 June 2026 is a Monday.
+    const weeks = monthGrid([], 2026, 5, today);
+    expect(weeks[0][0]?.key).toBe("2026-06-01");
+  });
+
+  it("includes every day of the month exactly once", () => {
+    const cells = cellsOf(monthGrid([], 2026, 2, today));
+    expect(cells).toHaveLength(31);
+    expect(cells[0].key).toBe("2026-03-01");
+    expect(cells[30].key).toBe("2026-03-31");
+    expect(new Set(cells.map((cell) => cell.key)).size).toBe(31);
+  });
+
+  it("handles February in a leap year", () => {
+    const cells = cellsOf(monthGrid([], 2028, 1, new Date(2028, 1, 12)));
+    expect(cells).toHaveLength(29);
+    expect(cells.at(-1)?.key).toBe("2028-02-29");
+  });
+
+  it("flags completed, today and future days", () => {
+    const cells = cellsOf(
+      monthGrid(["2026-03-01", "2026-03-10"], 2026, 2, today),
+    );
+    const byKey = new Map(cells.map((cell) => [cell.key, cell]));
+    expect(byKey.get("2026-03-01")?.done).toBe(true);
+    expect(byKey.get("2026-03-10")?.done).toBe(true);
+    expect(byKey.get("2026-03-09")?.done).toBe(false);
+    expect(byKey.get("2026-03-12")?.isToday).toBe(true);
+    expect(byKey.get("2026-03-12")?.isFuture).toBe(false);
+    expect(byKey.get("2026-03-13")?.isFuture).toBe(true);
+    expect(byKey.get("2026-03-11")?.isFuture).toBe(false);
+  });
+
+  it("ignores completions from other months", () => {
+    const cells = cellsOf(monthGrid(["2026-02-28"], 2026, 2, today));
+    expect(cells.some((cell) => cell.done)).toBe(false);
   });
 });
 

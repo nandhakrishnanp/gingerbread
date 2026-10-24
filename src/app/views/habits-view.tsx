@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   Check,
+  ChevronRight,
   CircleCheckBig,
   Pencil,
   Plus,
@@ -22,6 +23,7 @@ import {
 } from "@/lib/habits";
 import { plural } from "@/lib/format";
 import { HABIT_COLOR_META, HABIT_ICON_META, HabitGlyph, habitColorMeta } from "../habit-meta";
+import { HabitDetail } from "./habit-detail";
 import { Sheet } from "../sheet";
 import { inputClass, labelClass } from "../ui";
 import { cn } from "../cn";
@@ -58,10 +60,20 @@ export function HabitsView({
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  const activeHabit = openId
+    ? habits.find((habit) => habit.id === openId) ?? null
+    : null;
 
   const doneToday = habits.filter((habit) =>
     isCompletedToday(habit.completions),
   ).length;
+
+  function openCalendar(id: string) {
+    setOpenId(id);
+    window.scrollTo({ top: 0 });
+  }
 
   function openCreate() {
     setEditing(null);
@@ -126,86 +138,98 @@ export function HabitsView({
 
   return (
     <div className="animate-view space-y-4">
-      <header className="flex items-end justify-between gap-3">
-        <div>
-          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-ash">
-            Small things, every day
-          </p>
-          <h1 className="mt-1 text-[2rem] font-semibold leading-[1.05] tracking-[-0.045em]">
-            Habits
-          </h1>
-          <p className="mt-1 text-sm text-ash">
-            Each habit keeps its own little flame.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="tap grid h-12 w-12 shrink-0 place-items-center rounded-full bg-ink text-paper shadow-lg"
-          aria-label="New habit"
-        >
-          <Plus className="h-5 w-5" strokeWidth={2.4} aria-hidden />
-        </button>
-      </header>
-
-      <section className="flex items-center gap-4 rounded-[1.75rem] bg-ink p-5 text-paper">
-        <div className="min-w-0 flex-1">
-          <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-paper/55">
-            Today
-          </p>
-          <p className="mt-1 flex items-baseline gap-1.5">
-            <span className="text-[2.3rem] font-extrabold leading-none tracking-[-0.05em] tabular-nums">
-              {doneToday}
-            </span>
-            <span className="text-sm font-semibold text-paper/60">
-              of {habits.length} {plural(habits.length, "habit")}
-            </span>
-          </p>
-          <p className="mt-2 text-xs text-paper/55">
-            {habits.length === 0
-              ? "Add the first thing you want to repeat."
-              : doneToday === habits.length
-                ? "All done. The whole set is lit."
-                : "Tap a circle to check one off."}
-          </p>
-        </div>
-        <ProgressRing done={doneToday} total={habits.length} />
-      </section>
-
-      {habits.length === 0 ? (
-        <div className="rounded-[1.75rem] border border-dashed border-smoke px-6 py-12 text-center">
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-accent-lime text-[#09090b]">
-            <CircleCheckBig className="h-6 w-6" strokeWidth={2} aria-hidden />
-          </span>
-          <p className="mt-4 text-sm font-semibold">No habits yet.</p>
-          <p className="mt-1 text-sm text-ash">
-            Pick something small enough to do on a bad day.
-          </p>
-          <button
-            type="button"
-            onClick={openCreate}
-            className="tap mt-5 inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-paper"
-          >
-            <Plus className="h-4 w-4" aria-hidden /> Add a habit
-          </button>
-        </div>
+      {activeHabit ? (
+        <HabitDetail
+          key={activeHabit.id}
+          habit={activeHabit}
+          onBack={() => setOpenId(null)}
+          onEdit={() => openEdit(activeHabit)}
+        />
       ) : (
-        <ol className="stagger space-y-3">
-          {habits.map((habit) => (
-            <HabitCard
-              key={habit.id}
-              habit={habit}
-              busy={busyIds.has(habit.id)}
-              onToggle={() => onToggle(habit.id)}
-              onEdit={() => openEdit(habit)}
-            />
-          ))}
-        </ol>
-      )}
+        <>
+          <header className="flex items-end justify-between gap-3">
+            <div>
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-ash">
+                Small things, every day
+              </p>
+              <h1 className="mt-1 text-[2rem] font-semibold leading-[1.05] tracking-[-0.045em]">
+                Habits
+              </h1>
+              <p className="mt-1 text-sm text-ash">
+                Each habit keeps its own little flame.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={openCreate}
+              className="tap grid h-12 w-12 shrink-0 place-items-center rounded-full bg-ink text-paper shadow-lg"
+              aria-label="New habit"
+            >
+              <Plus className="h-5 w-5" strokeWidth={2.4} aria-hidden />
+            </button>
+          </header>
 
-      <p className="px-1 pb-2 text-center text-[0.66rem] leading-relaxed text-ash">
-        An empty today does not break a streak until tomorrow.
-      </p>
+          <section className="flex items-center gap-4 rounded-[1.75rem] bg-ink p-5 text-paper">
+            <div className="min-w-0 flex-1">
+              <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-paper/55">
+                Today
+              </p>
+              <p className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-[2.3rem] font-extrabold leading-none tracking-[-0.05em] tabular-nums">
+                  {doneToday}
+                </span>
+                <span className="text-sm font-semibold text-paper/60">
+                  of {habits.length} {plural(habits.length, "habit")}
+                </span>
+              </p>
+              <p className="mt-2 text-xs text-paper/55">
+                {habits.length === 0
+                  ? "Add the first thing you want to repeat."
+                  : doneToday === habits.length
+                    ? "All done. The whole set is lit."
+                    : "Tap a circle to check one off."}
+              </p>
+            </div>
+            <ProgressRing done={doneToday} total={habits.length} />
+          </section>
+
+          {habits.length === 0 ? (
+            <div className="rounded-[1.75rem] border border-dashed border-smoke px-6 py-12 text-center">
+              <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-accent-lime text-[#09090b]">
+                <CircleCheckBig className="h-6 w-6" strokeWidth={2} aria-hidden />
+              </span>
+              <p className="mt-4 text-sm font-semibold">No habits yet.</p>
+              <p className="mt-1 text-sm text-ash">
+                Pick something small enough to do on a bad day.
+              </p>
+              <button
+                type="button"
+                onClick={openCreate}
+                className="tap mt-5 inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-paper"
+              >
+                <Plus className="h-4 w-4" aria-hidden /> Add a habit
+              </button>
+            </div>
+          ) : (
+            <ol className="stagger space-y-3">
+              {habits.map((habit) => (
+                <HabitCard
+                  key={habit.id}
+                  habit={habit}
+                  busy={busyIds.has(habit.id)}
+                  onToggle={() => onToggle(habit.id)}
+                  onEdit={() => openEdit(habit)}
+                  onOpen={() => openCalendar(habit.id)}
+                />
+              ))}
+            </ol>
+          )}
+
+          <p className="px-1 pb-2 text-center text-[0.66rem] leading-relaxed text-ash">
+            An empty today does not break a streak until tomorrow.
+          </p>
+        </>
+      )}
 
       <Sheet
         open={sheetOpen}
@@ -365,11 +389,13 @@ function HabitCard({
   busy,
   onToggle,
   onEdit,
+  onOpen,
 }: {
   habit: DecryptedHabit;
   busy: boolean;
   onToggle: () => void;
   onEdit: () => void;
+  onOpen: () => void;
 }) {
   const color = habitColorMeta(habit.color);
   const streak = habitStreak(habit.completions);
@@ -387,27 +413,36 @@ function HabitCard({
         color.bg,
       )}
     >
-      <div className="flex items-start gap-3">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#09090b]/10">
-          <HabitGlyph name={habit.icon} className="h-5 w-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[1.02rem] font-bold leading-tight tracking-[-0.02em]">
-            {habit.name}
-          </p>
-          <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[0.68rem] font-semibold text-[#09090b]/60">
-            <span className="inline-flex items-center gap-1">
-              <span className="text-accent-orange">
-                <FlameGlyph />
+      <div className="flex items-start gap-2">
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`Open ${habit.name} calendar`}
+          className="tap flex min-w-0 flex-1 items-start gap-3 rounded-2xl text-left"
+        >
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#09090b]/10">
+            <HabitGlyph name={habit.icon} className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[1.02rem] font-bold leading-tight tracking-[-0.02em]">
+              {habit.name}
+            </span>
+            <span className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[0.68rem] font-semibold text-[#09090b]/60">
+              <span className="inline-flex items-center gap-1">
+                <span className="text-accent-orange">
+                  <FlameGlyph />
+                </span>
+                {streak} {plural(streak, "day")} streak
               </span>
-              {streak} {plural(streak, "day")} streak
+              <span aria-hidden>·</span>
+              <span>{rate}/7 this week</span>
             </span>
-            <span aria-hidden>·</span>
-            <span>
-              {rate}/7 this week
-            </span>
-          </p>
-        </div>
+          </span>
+          <ChevronRight
+            className="mt-2.5 h-4 w-4 shrink-0 text-[#09090b]/35"
+            aria-hidden
+          />
+        </button>
         <button
           type="button"
           onClick={onEdit}
